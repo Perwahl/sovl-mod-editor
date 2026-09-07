@@ -134,10 +134,42 @@ function textInput(value, onChange, placeholder = '') {
   return el('input', { type: 'text', value: value ?? '', placeholder, oninput: (e) => onChange(e.target.value) });
 }
 
-function numberInput(value, onChange, { min, max, step } = {}) {
+// Ids cannot carry surrounding whitespace, but trimming on every keystroke makes a typed space vanish
+// mid-word and drags the caret with it. Take the text as typed and tidy it once the field is left - and
+// only when there is something to tidy, so leaving a clean field never disturbs the pane on the way out.
+function idInput(value, onChange) {
   return el('input', {
-    type: 'number', value: value ?? 0, min, max, step: step ?? 1,
-    oninput: (e) => onChange(e.target.value === '' ? 0 : Number(e.target.value)),
+    type: 'text', value: value ?? '',
+    oninput: (e) => onChange(e.target.value),
+    onchange: (e) => {
+      const trimmed = e.target.value.trim();
+      if (trimmed === e.target.value) return;
+      e.target.value = trimmed;
+      onChange(trimmed);
+    },
+  });
+}
+
+// A number input's caret cannot be read back, so it cannot survive its node being replaced. Nothing in the
+// detail pane is derived from these numbers - only the outline and the problem list are - so hold the pane
+// still while one is being typed into and let the browser keep its own caret.
+let keepDetail = false;
+
+function numberInput(value, onChange, { min, max, step } = {}) {
+  let last = value ?? 0;
+  return el('input', {
+    type: 'number', value: last, min, max, step: step ?? 1,
+    oninput: (e) => {
+      // Chrome reports an empty value for anything not yet a valid number - a cleared field, a lone "-",
+      // a trailing "." - so treat that as an edit in progress and leave the model on its last good value
+      // rather than forcing a zero the typist then has to delete.
+      if (e.target.value === '') return;
+      last = Number(e.target.value);
+      keepDetail = true;
+      try { onChange(last); } finally { keepDetail = false; }
+    },
+    // Left half-finished: show the value the model actually kept.
+    onchange: (e) => { if (e.target.value === '') e.target.value = String(last); },
   });
 }
 
@@ -336,20 +368,66 @@ async function exportZip() {
 // Rendering
 // ---------------------------------------------------------------------------------------------------
 
+// Every edit re-renders the whole panel, which throws away the node the caret sits in. Remember where
+// the caret was as a positional path from the panel root, then put it back once the new tree is in place.
+function captureFocus() {
+  const node = document.activeElement;
+  const root = node ? node.closest('#outline, #detail, #problems') : null;
+  if (!root) return null;
+
+  const path = [];
+  for (let n = node; n !== root; n = n.parentNode) {
+    if (!n.parentNode) return null;
+    path.unshift([...n.parentNode.childNodes].indexOf(n));
+  }
+
+  // Number inputs report a null caret and cannot be given one back; keepDetail below spares them the rebuild.
+  let start = null;
+  let end = null;
+  try { start = node.selectionStart; end = node.selectionEnd; } catch { /* checkboxes have no caret */ }
+  return { rootId: root.id, path, tag: node.tagName, type: node.getAttribute('type'), start, end };
+}
+
+function restoreFocus(state) {
+  if (!state) return;
+
+  let node = document.getElementById(state.rootId);
+  for (const index of state.path) {
+    node = node && node.childNodes[index];
+    if (!node) return;
+  }
+  // The tree can change shape - a different kind of control in that slot means the old caret is meaningless.
+  if (node.tagName !== state.tag || node.getAttribute('type') !== state.type) return;
+
+  // Still the live node - it was never rebuilt, so the browser has kept a better caret than we recorded.
+  if (node === document.activeElement) return;
+
+  node.focus();
+  if (state.start === null || state.start === undefined) return;
+  // The handler may have rewritten the value shorter than what was typed, so clamp the caret into it.
+  const max = (node.value ?? '').length;
+  const end = state.end ?? state.start;
+  try { node.setSelectionRange(Math.min(state.start, max), Math.min(end, max)); } catch { /* no caret */ }
+}
+
 function render() {
+  const focus = captureFocus();
   saveDraft();
   document.getElementById('outline').replaceChildren(renderOutline());
-  document.getElementById('detail').replaceChildren(renderDetail());
+  if (!keepDetail) document.getElementById('detail').replaceChildren(renderDetail());
   renderProblems();
+  restoreFocus(focus);
 }
 
 function renderProblems() {
   const problems = validate();
   const bar = document.getElementById('problems');
+  const wasOpen = bar.querySelector('details')?.open ?? false;
   bar.className = problems.length ? 'problems bad' : 'problems good';
   bar.replaceChildren(
     problems.length
-      ? el('details', {}, el('summary', {}, `${problems.length} problem${problems.length === 1 ? '' : 's'} to fix before this mod will load`),
+      ? el('details', { open: wasOpen ? 'open' : false },
+          el('summary', {}, `${problems.length} problem${problems.length === 1 ? '' : 's'} to fix before this mod will load`),
           el('ul', {}, problems.map((p) => el('li', {}, p))))
       : el('span', {}, 'Ready to export.'));
 }
@@ -411,14 +489,14 @@ function renderMod() {
 
   return el('div', {},
     el('h2', {}, 'Mod'),
-    field('Mod id', textInput(mod.modId, (v) => { mod.modId = v.trim(); render(); }),
+    field('Mod id', idInput(mod.modId, (v) => { mod.modId = v; render(); }),
       'Lower-case. Every unit and property id must start with this, followed by a colon.'),
     field('Display name', textInput(mod.displayName, (v) => { mod.displayName = v; render(); })),
     field('Author', textInput(mod.author, (v) => { mod.author = v; saveDraft(); })),
     field('Version', textInput(mod.contentVersion, (v) => { mod.contentVersion = v; saveDraft(); })),
 
     el('h2', {}, 'Faction'),
-    field('Slug', textInput(faction.slug, (v) => { faction.slug = v.trim(); render(); })),
+    field('Slug', idInput(faction.slug, (v) => { faction.slug = v; render(); })),
     field('Display name', textInput(faction.displayName, (v) => { faction.displayName = v; render(); })),
     field('Material template', select(faction.materialTemplate, catalog.materialTemplates, (v) => { faction.materialTemplate = v; saveDraft(); })),
     field('Faction image', select(faction.factionImage, imagePaths, (v) => { faction.factionImage = v; render(); }, { allowEmpty: true })),
@@ -458,7 +536,7 @@ function renderProperty(property, index) {
   return el('div', {},
     el('h2', {}, 'Property',
       button('delete', () => { mod.faction.properties.splice(index, 1); selection = { kind: 'mod' }; render(); }, 'tiny danger')),
-    field('Id', textInput(property.id, (v) => { property.id = v.trim(); render(); }), `Must start with "${mod.modId}:".`),
+    field('Id', idInput(property.id, (v) => { property.id = v; render(); }), `Must start with "${mod.modId}:".`),
     field('Display name', textInput(property.displayName, (v) => { property.displayName = v; render(); })),
     field('Description', textInput(property.description, (v) => { property.description = v; saveDraft(); })),
     field('Applies to', select(property.appliesTo ?? 'Models', catalog.propertyAppliesTo, (v) => { property.appliesTo = v; saveDraft(); })),
@@ -571,7 +649,7 @@ function renderUnit(unit, sel) {
       else { unit.retinueOptions = unit.retinueOptions ?? []; delete unit.modelCountLimits; }
       render();
     })),
-    field('Unit id', textInput(unit.unitID, (v) => { unit.unitID = v.trim(); render(); }), `Must start with "${mod.modId}:".`),
+    field('Unit id', idInput(unit.unitID, (v) => { unit.unitID = v; render(); }), `Must start with "${mod.modId}:".`),
     field('Display name', textInput(unit.displayName, (v) => { unit.displayName = v; render(); })),
     field('Points', numberInput(unit.pointsCost, (v) => { unit.pointsCost = v; render(); }, { min: catalog.limits.minPointsCost, max: catalog.limits.maxPointsCost })),
     field('Model type', select(unit.modelType, catalog.modelTypes.map((m) => m.name), (v) => { unit.modelType = v; saveDraft(); }),
