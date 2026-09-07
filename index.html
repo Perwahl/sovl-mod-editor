@@ -74,6 +74,12 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   button.primary:hover { filter: brightness(1.1); }
 
+  a.guide {
+    background: #322f3c; border: 1px solid var(--line); color: var(--text); text-decoration: none;
+    border-radius: 5px; padding: 6px 12px; font: inherit;
+  }
+  a.guide:hover { background: #3d3948; }
+
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 12px; margin-bottom: 10px; }
   .card.thin { padding: 9px; }
 
@@ -122,6 +128,7 @@
     <h1>SOVL Mod Editor</h1>
     <span id="catalogVersion"></span>
     <span class="spacer"></span>
+    <a class="guide" href="guide.html" target="_blank" rel="noopener">Guide</a>
     <button id="openFolderButton">Open mod folder</button>
     <button id="openZipButton">Open mod.zip</button>
     <button id="resetButton">Start over</button>

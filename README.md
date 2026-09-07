@@ -3,16 +3,21 @@
 A browser tool for building faction mods for [SOVL](https://store.steampowered.com/app/1870300/).
 
 Author a faction — units, stats, points, properties, effects and your own model art — and export a
-`mod.zip` the game can import. Everything runs in your browser; nothing is uploaded anywhere, and
-drafts are kept in your browser's own storage.
+`mod.zip` you drop into the game's mods folder. Everything runs in your browser; nothing is uploaded
+anywhere, and drafts are kept in your browser's own storage.
 
 **Use it here: https://perwahl.github.io/sovl-mod-editor/**
+
+**[Read the modding guide](https://perwahl.github.io/sovl-mod-editor/guide.html)** — the full
+workflow, current limitations, and what every option in the editor does. It is
+[`guide.html`](guide.html), served from the same Pages site as the editor and linked from its header.
 
 ## Using it
 
 1. Fill in a mod id and a faction, add sections and units.
 2. Drop in PNG art for unit cards and models.
-3. **Export mod.zip**, then import it in-game from the Mods panel.
+3. **Export mod.zip**, then unzip it into the game's mods folder — **Mods → Open folder** in the
+   game opens the right place.
 
 **Open mod folder** and **Open mod.zip** load an existing mod back in for editing — a folder if it is
 one of yours already installed, a zip if someone sent it to you.
