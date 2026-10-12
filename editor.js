@@ -401,7 +401,7 @@ function advise() {
         for (const id of [selector.propertyId, ...(selector.propertyIds ?? [])].filter(Boolean)) {
           const type = catalog.properties.find((p) => p.id === id)?.type;
           if (type === 'UnitPropertyCommanderAbility' && unit.kind === 'regiment') {
-            notes.push(`${unit.displayName || unit.unitID}: ${id} is a commander ability and does nothing on a regiment.`);
+            notes.push(`${unit.displayName || unit.unitID}: ${id} is a commander ability, which only works on characters. The game leaves it off this regiment.`);
           }
           if (type === 'UnitPropertySpell' && selector.kind !== 'spellList') {
             notes.push(`${unit.displayName || unit.unitID}: give spells through a spellList, not as a plain property (${id}).`);
@@ -570,7 +570,7 @@ const HELP = {
     extraRankAttacks: 'One more rank of models fights in melee.',
     ignoreDifficultTerrain: 'Moves through difficult terrain without slowing down.',
     ignoreImpassableTerrain: 'Moves over impassable terrain.',
-    movement: 'Adds Amount inches to the unit\'s move, or replaces its move with Amount.',
+    movement: 'Adds Amount inches to every move the unit makes, charges included, or replaces its move with Amount. Of the When conditions only "withCommander" means anything here; combat ones never hold while moving.',
     rangedAttackBonus: 'Changes this unit\'s shooting. Collected from "opponent" changes shooting aimed at this unit instead.',
     regeneration: 'Can recover lost wounds.',
     statModifier: 'Adds Value to a stat while the condition holds. Negative values lower it. It never sets the stat outright.',
@@ -602,11 +602,11 @@ const HELP = {
       toHitMod: 'Adds Value to rolls to hit. Positive makes hitting easier.',
       rerollMisses: 'Re-roll shots that miss.',
       rerollHits: 'Re-roll shots that hit (put this on enemies with "opponent").',
-      extraAttacks: 'Value more shots for every model that shoots.',
+      extraAttacks: 'Value more shots for a war machine or other special attack (cannon, flamer, bolt thrower). Does nothing for ordinary bows and guns: use extraShots there.',
       rerollOnes: 'Re-roll to-hit rolls of 1.',
       plusPower: 'Adds Value to the weapon\'s Power.',
       cover: 'Shots count the target as being in cover.',
-      extraShots: 'Shots are multiplied by 1 + Value, so Value 1 doubles them.',
+      extraShots: 'For ordinary bows, guns and crossbows: shots are multiplied by 1 + Value, so Value 1 makes every model shoot twice. Does nothing for special attacks: use extraAttacks there.',
       ignoreCover: 'Ignores the target\'s cover.',
       extraRank: 'One more rank of models can shoot.',
     },

@@ -220,12 +220,23 @@ beside the original instead of clashing with it. You can only publish updates to
   <li><strong>A stat modifier adds, it does not set.</strong> Value 1 on Attacks gives +1 Attacks.
       Negative values lower the stat.</li>
   <li><strong><code>firstRound</code> is the first round of each combat</strong>, whoever charged — not
-      the first turn of the battle. Combine it with <code>charging</code> for a charge bonus.</li>
-  <li><strong><code>extraAttacks</code> vs <code>extraShots</code>.</strong> <code>extraAttacks</code>
-      adds Value shots for every model that shoots. <code>extraShots</code> multiplies the shots by
-      1 + Value, so Value 1 doubles them.</li>
+      the first turn of the battle. Combine it with <code>charging</code> for a charge bonus. Stat
+      modifiers honour it too, as well as <code>melee</code> and <code>targetUnitType</code> ("+1 Attacks
+      against cavalry").</li>
+  <li><strong>A save "vs" a unit type is about the attacker.</strong> A <code>damageSave</code> with
+      <code>targetUnitType</code> on the unit making the save checks who is hitting it.</li>
+  <li><strong><code>extraAttacks</code> vs <code>extraShots</code> depends on the weapon.</strong>
+      Ordinary bows, guns and crossbows read only <code>extraShots</code>, which multiplies the shots by
+      1 + Value (Value 1 makes every model shoot twice). Special attacks — cannons, flamers, bolt
+      throwers — read only <code>extraAttacks</code>, which adds Value shots. This is why a repeating
+      crossbow ignored <code>extraAttacks</code>.</li>
   <li><strong>Commander abilities only work on characters.</strong> Put Demonic Possession and the like
-      on a regiment and nothing happens. The editor flags this at the bottom.</li>
+      on a regiment and the game leaves it off. The editor flags this at the bottom.</li>
+  <li><strong>Movement changes apply to every move, charges included.</strong> A <em>When</em> about
+      charging or combat never holds while a unit moves, so such a movement effect does nothing. To stop
+      a war machine charging, keep its war machine rules rather than cutting its movement.</li>
+  <li><strong>A commander's own bow or flamer shoots once</strong>, not once per model in the unit it
+      leads.</li>
   <li><strong>Spells go in a <code>spellList</code></strong>, not as plain properties. List the spells the
       caster can choose from and how many it knows.</li>
   <li><strong>An unticked army size does not ban a regiment.</strong> It can then be taken at 1–100
