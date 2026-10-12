@@ -6,7 +6,7 @@ import { fillShownValues, readModFiles, referencedImages, validate } from '../mo
 const readText = (path) => readFileSync(new URL(path, import.meta.url));
 const readJson = (path) => JSON.parse(readText(path).toString('utf8'));
 
-const catalog = readJson('../catalog.v1.json');
+const catalog = readJson('../catalog.v2.json');
 const encoder = new TextEncoder();
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 

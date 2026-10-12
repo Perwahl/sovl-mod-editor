@@ -4,7 +4,7 @@
   "displayName": "Mounts Fixture",
   "author": "sovl-mod-editor tests",
   "contentVersion": "1.0.0",
-  "minGameVersion": "1.32",
+  "minGameVersion": "1.32.0",
   "factions": [
     "factions/spellcaster.json",
     "factions/second.json"

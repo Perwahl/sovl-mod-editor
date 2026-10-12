@@ -549,10 +549,135 @@ function renderProperty(property, index) {
     field('Display name', textInput(property.displayName, (v) => { property.displayName = v; render(); })),
     field('Description', textInput(property.description, (v) => { property.description = v; saveDraft(); })),
     field('Applies to', select(property.appliesTo ?? 'Models', catalog.propertyAppliesTo, (v) => { property.appliesTo = v; saveDraft(); })),
+    field('Icon', select(property.icon ?? '', [...images.keys()], (v) => { if (v) property.icon = v; else delete property.icon; render(); }, { allowEmpty: true }),
+      'Optional. Shown beside the rule, and on the button if it is an ability. A small square PNG.'),
 
-    el('h3', {}, 'Effects', button('+ effect', () => { property.effects.push({ kind: 'statModifier', stat: 'Power', value: 1 }); render(); }, 'tiny')),
-    property.effects.map((effect, i) => renderEffect(effect, () => { property.effects.splice(i, 1); render(); })));
+    catalog.abilities ? renderAbility(property) : null,
+
+    property.ability?.attack
+      ? null
+      : [
+          el('h3', {}, property.ability ? 'Effects laid on the target' : 'Effects',
+            button('+ effect', () => { property.effects.push({ kind: 'statModifier', stat: 'Power', value: 1 }); render(); }, 'tiny')),
+          property.ability
+            ? el('p', { class: 'hint' }, property.ability.duration === -1
+                ? 'They last for the rest of the battle once the ability is used.'
+                : `They last ${property.ability.duration} turn${property.ability.duration === 1 ? '' : 's'} once the ability is used, then wear off.`)
+            : null,
+          property.effects.map((effect, i) => renderEffect(effect, () => { property.effects.splice(i, 1); render(); })),
+        ]);
 }
+
+function newAbility() {
+  return { type: 'ability', charges: 1, target: 'self', range: 12, allInRange: false, canTargetInCombat: true, inCombat: 'any', duration: 1 };
+}
+
+const TARGET_HELP = {
+  self: 'The unit using it (and its commander).',
+  friendly: 'A friendly unit in range, picked when used.',
+  enemy: 'An enemy unit in range, picked when used.',
+};
+
+const IN_COMBAT_HELP = {
+  any: 'Usable in or out of combat.',
+  only: 'Only while the unit is in combat.',
+  never: 'Only while the unit is not in combat.',
+};
+
+// A player-triggered ability: what the game's own Warcry, Reposition, Regrowth or Fireball are.
+function renderAbility(property) {
+  const toggle = checkbox(!!property.ability, 'Activated ability - the player triggers it during the battle', (on) => {
+    if (on) property.ability = newAbility(); else delete property.ability;
+    render();
+  });
+  const ability = property.ability;
+  if (!ability) {
+    return el('div', {}, el('h3', {}, 'Ability'), toggle,
+      el('p', { class: 'hint' }, 'Leave off for a passive rule that is always on, or on whenever its When holds.'));
+  }
+
+  const a = catalog.abilities;
+  const limits = catalog.limits;
+  const attack = ability.attack;
+  const rows = [
+    el('h3', {}, 'Ability'), toggle,
+    el('p', { class: 'hint' }, 'A unit can use one ability per turn, in the strategic phase, and still move.'),
+    el('div', { class: 'row' },
+      field('Kind', select(ability.type, a.types, (v) => { ability.type = v; if (v !== 'spell') delete ability.cantrip; render(); })),
+      ability.type === 'spell'
+        ? checkbox(ability.cantrip, 'Cantrip (the minor slot in a spellList)', (v) => { ability.cantrip = v; saveDraft(); })
+        : null),
+    el('div', { class: 'row' },
+      checkbox(ability.charges === -1, 'Unlimited uses', (v) => { ability.charges = v ? -1 : 1; render(); }),
+      ability.charges === -1 ? null
+        : field('Uses per battle', numberInput(ability.charges, (v) => { ability.charges = v; render(); }, { min: 1, max: limits.maxAbilityCharges }))),
+    field('Usable', select(ability.inCombat, a.inCombat, (v) => { ability.inCombat = v; render(); }), IN_COMBAT_HELP[ability.inCombat] ?? ''),
+    field('Target', select(ability.target, a.targets, (v) => { ability.target = v; if (v !== 'enemy') delete ability.attack; render(); }), TARGET_HELP[ability.target] ?? ''),
+  ];
+
+  if (ability.target !== 'self') {
+    rows.push(
+      field('Range (inches)', numberInput(ability.range, (v) => { ability.range = v; render(); }, { min: 1, max: limits.maxAbilityRange }),
+        `${limits.maxAbilityRange} means anywhere on the table.${attack ? ' Attacks also need line of sight.' : ''}`),
+      attack ? null : checkbox(ability.allInRange, 'Every unit in range, instead of one the player picks', (v) => { ability.allInRange = v; render(); }),
+      checkbox(ability.canTargetInCombat, 'Can target units that are in combat', (v) => { ability.canTargetInCombat = v; saveDraft(); }),
+      el('div', { class: 'field' }, el('span', { class: 'label' }, 'Only these unit types (optional)'),
+        el('div', { class: 'chips' }, catalog.unitTypes.map((type) =>
+          checkbox((ability.targetUnitTypes ?? []).includes(type), type, (on) => {
+            ability.targetUnitTypes = (ability.targetUnitTypes ?? []).filter((t) => t !== type);
+            if (on) ability.targetUnitTypes.push(type);
+            if (!ability.targetUnitTypes.length) delete ability.targetUnitTypes;
+            saveDraft();
+          })))));
+  }
+
+  if (ability.target === 'enemy') {
+    rows.push(checkbox(!!attack, 'Magical attack - rolled like shooting, with saves (like Fireball)', (on) => {
+      if (on) { ability.attack = { power: 4, dice: a.attackDice[0], count: 1, visual: 'Fireball' }; delete ability.heal; delete ability.rally; }
+      else delete ability.attack;
+      render();
+    }));
+  }
+
+  if (attack) {
+    rows.push(el('div', { class: 'card thin' },
+      field('Power', numberInput(attack.power, (v) => { attack.power = v; render(); }, { min: 1, max: limits.maxAttackPower })),
+      el('div', { class: 'row' },
+        field('Dice', select(attack.dice, a.attackDice, (v) => { attack.dice = v; render(); }), ATTACK_DICE_HELP[attack.dice] ?? ''),
+        field('Count', numberInput(attack.count, (v) => { attack.count = v; render(); }, { min: 1, max: limits.maxAttackCount }))),
+      field('Looks like', select(attack.visual, a.attackVisuals, (v) => { attack.visual = v; saveDraft(); }))));
+    if (property.effects.length) {
+      rows.push(el('p', { class: 'hint' }, 'An attack cannot also lay effects; they are ignored. Make a second ability for them.'));
+    }
+    return el('div', {}, rows);
+  }
+
+  rows.push(field('Lasts (turns)', numberInput(ability.duration, (v) => { ability.duration = v; render(); }, { min: -1, max: limits.maxAbilityDuration }),
+    '-1 for the rest of the battle. Only matters for effects; a heal or rally is instant.'));
+
+  rows.push(checkbox(!!ability.heal, 'Heals the target', (on) => {
+    if (on) ability.heal = { d3: 1, plus: 0 }; else delete ability.heal;
+    render();
+  }));
+  if (ability.heal) {
+    rows.push(el('div', { class: 'card thin' },
+      checkbox(ability.heal.fullHeal, 'Heal every wound', (v) => { ability.heal.fullHeal = v; render(); }),
+      ability.heal.fullHeal ? null : el('div', { class: 'row' },
+        field('D3 rolls', numberInput(ability.heal.d3, (v) => { ability.heal.d3 = v; render(); }, { min: 0, max: limits.maxHealDice })),
+        field('Plus wounds', numberInput(ability.heal.plus, (v) => { ability.heal.plus = v; render(); }, { min: 0, max: limits.maxHealBonus })))));
+  }
+
+  rows.push(checkbox(ability.rally, 'Rallies the target if it is fleeing', (v) => { ability.rally = v; render(); }));
+
+  return el('div', {}, rows);
+}
+
+const ATTACK_DICE_HELP = {
+  RandomD6: 'Roll Count D6 and add them up: that many hits. Cover lowers the total.',
+  RandomD3: 'Roll Count D3 and add them up: that many hits. Cover lowers the total.',
+  SetNumber: 'Count shots, each rolled to hit.',
+  SetNumberAutoHit: 'Count hits, no roll to hit.',
+};
 
 // ---------------------------------------------------------------------------------------------------
 // Plain-language help. The catalog gives the ids the game reads; these say what each one does, because
@@ -1110,7 +1235,8 @@ document.getElementById('resetButton').addEventListener('click', () => {
 
 // Served over http the catalog loads itself; opened straight from disk the browser blocks that, so the
 // file picker is the fallback rather than an error.
-fetch('catalog.v1.json')
+// The catalog is named for the newest schema it describes.
+fetch('catalog.v2.json')
   .then((r) => (r.ok ? r.json() : Promise.reject()))
   .then(start)
   .catch(() => {

@@ -101,6 +101,7 @@ properties you define yourself out of the effects listed further down.</p>
     </li>
     <li><a href="#surprises">Common surprises</a></li>
     <li><a href="#not-yet">What is not in yet</a></li>
+    <li><a href="#abilities">Abilities</a></li>
     <li><a href="#detail">The editor in detail</a></li>
   </ul>
 </nav>
@@ -269,12 +270,11 @@ mod is used in a battle. Restart the game to get them back.</p>
 <h3>Rules you cannot author</h3>
 
 <ul>
-  <li><strong>No custom activated abilities.</strong> Properties you define are passive — always on, or
-      gated by a condition like <em>charging</em> or <em>in combat</em>. You cannot write a rule the
-      player triggers during a battle. Built-in properties with activated abilities still work; you just
-      cannot make new ones.</li>
-  <li><strong>No spells or magic items.</strong> You can give a unit a built-in spell list, but not
-      write new spells.</li>
+  <li><strong>Abilities come in four shapes.</strong> A buff or debuff that lasts some turns, a heal, a
+      rally, or a magical attack — see <a href="#abilities">Abilities</a>. Not yet: abilities that reactivate
+      units, give spells back, hit only the commander, or trigger by themselves.</li>
+  <li><strong>No new magic items.</strong> Units can buy the game's own magic weapons, items and
+      banners.</li>
   <li><strong>No "not" and no "was charged" condition yet.</strong> You can say <em>charging</em> but
       not <em>not charging</em>, and there is no condition for the unit that received the charge.</li>
   <li><strong>No custom ranged attack profiles.</strong> You can modify existing ranged attacks with
@@ -480,6 +480,41 @@ bonus:</p>
 <p><strong>Collected from</strong> decides who the effect lands on — <code>ownerUnit</code> (the unit
 carrying the property) or <code>opponent</code> (whoever it is fighting). <strong>Aura</strong> extends
 it to the unit a commander has joined.</p>
+
+<h3 id="abilities">Abilities</h3>
+
+<p>Tick <strong>Activated ability</strong> on a property to turn it from a passive rule into something
+the player triggers in the strategic phase — your own Warcry, Reposition, Regrowth or Fireball. A unit
+can use one ability per turn (its commander one more) and still move afterwards. The AI uses them too: attacks when it shoots, buffs and debuffs once units are in combat.</p>
+
+<ul>
+  <li><strong>Kind</strong> — <em>ability</em> or <em>spell</em>. A spell can be offered through a
+      <code>spellList</code> like the game's own; tick <em>cantrip</em> for the minor slot.</li>
+  <li><strong>Uses per battle</strong> — or unlimited.</li>
+  <li><strong>Usable</strong> — in or out of combat, only in combat, or never in combat.</li>
+  <li><strong>Target</strong> — <em>self</em> (the unit and its commander), or one <em>friendly</em> or
+      <em>enemy</em> unit within <strong>range</strong> that the player picks. Tick <em>every unit in
+      range</em> to hit them all, and narrow it to some unit types if you like.</li>
+</ul>
+
+<p>What it does:</p>
+
+<ul>
+  <li><strong>Effects</strong> — the same effects as any property, laid on the target for
+      <strong>Lasts</strong> turns (or the rest of the battle). +1 Power to yourself for a turn is a
+      Warcry; −2 Defense on an enemy for two turns is a hex. Their <em>When</em> still applies while they
+      last.</li>
+  <li><strong>Heal</strong> — some D3 plus some wounds, or every wound.</li>
+  <li><strong>Rally</strong> — a fleeing target rallies. On its own, only fleeing units can be
+      picked.</li>
+  <li><strong>Magical attack</strong> (enemy only) — rolled like shooting, with to-hit, saves and line of
+      sight: a <strong>Power</strong>, how many dice or shots, and which of the game's effects it looks
+      like. An attack is the whole ability; for an attack that also hexes, make two abilities.</li>
+</ul>
+
+<p>Give it an <strong>icon</strong> (a small square PNG) for the button. Mods with abilities need this
+version of the game or newer; the editor marks them as such, and an older game says so instead of
+loading the ability as an always-on rule.</p>
 
 <h3>Limits</h3>
 

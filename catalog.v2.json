@@ -1,13 +1,13 @@
 {
-  "schemaVersion": 1,
-  "gameVersion": "1.32",
-  "generated": "2026-09-06",
+  "schemaVersion": 2,
+  "gameVersion": "1.32.0",
+  "generated": "2026-10-12",
   "modelTypes": [
     {
       "name": "Cavalry",
       "width": 25,
       "height": 50,
-      "movement": 16.0,
+      "movement": 16,
       "minimumModelsWidth": 4,
       "maximumModelsWidth": 6,
       "isMonstrous": false
@@ -16,7 +16,7 @@
       "name": "CavalryLance",
       "width": 25,
       "height": 50,
-      "movement": 16.0,
+      "movement": 16,
       "minimumModelsWidth": 3,
       "maximumModelsWidth": 6,
       "isMonstrous": false
@@ -25,7 +25,7 @@
       "name": "Chariot",
       "width": 50,
       "height": 100,
-      "movement": 16.0,
+      "movement": 16,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": false
@@ -34,7 +34,7 @@
       "name": "Gargantuan",
       "width": 100,
       "height": 150,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": true
@@ -43,7 +43,7 @@
       "name": "Hounds",
       "width": 20,
       "height": 40,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 4,
       "maximumModelsWidth": 6,
       "isMonstrous": false
@@ -52,7 +52,7 @@
       "name": "Infantry",
       "width": 20,
       "height": 20,
-      "movement": 8.0,
+      "movement": 8,
       "minimumModelsWidth": 5,
       "maximumModelsWidth": 7,
       "isMonstrous": false
@@ -61,7 +61,7 @@
       "name": "InfantryLarge",
       "width": 25,
       "height": 25,
-      "movement": 8.0,
+      "movement": 8,
       "minimumModelsWidth": 4,
       "maximumModelsWidth": 6,
       "isMonstrous": false
@@ -70,7 +70,7 @@
       "name": "LargeMonster",
       "width": 50,
       "height": 50,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": true
@@ -79,7 +79,7 @@
       "name": "LargeMonsterLongBase",
       "width": 50,
       "height": 100,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": true
@@ -88,7 +88,7 @@
       "name": "MonstrousInfantry",
       "width": 40,
       "height": 40,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 3,
       "maximumModelsWidth": 4,
       "isMonstrous": true
@@ -97,7 +97,7 @@
       "name": "Swarm",
       "width": 40,
       "height": 40,
-      "movement": 8.0,
+      "movement": 8,
       "minimumModelsWidth": 3,
       "maximumModelsWidth": 4,
       "isMonstrous": false
@@ -106,7 +106,7 @@
       "name": "WarMachine",
       "width": 50,
       "height": 50,
-      "movement": 0.0,
+      "movement": 0,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": false
@@ -115,7 +115,7 @@
       "name": "WarWagon",
       "width": 50,
       "height": 100,
-      "movement": 12.0,
+      "movement": 12,
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": false
@@ -124,7 +124,7 @@
       "name": "WeaponTeam",
       "width": 25,
       "height": 50,
-      "movement": 8.0,
+      "movement": 8,
       "minimumModelsWidth": 4,
       "maximumModelsWidth": 6,
       "isMonstrous": false
@@ -358,6 +358,44 @@
     "allOf",
     "anyOf"
   ],
+  "abilities": {
+    "types": [
+      "ability",
+      "spell"
+    ],
+    "targets": [
+      "self",
+      "friendly",
+      "enemy"
+    ],
+    "inCombat": [
+      "any",
+      "only",
+      "never"
+    ],
+    "attackDice": [
+      "RandomD6",
+      "SetNumber",
+      "SetNumberAutoHit",
+      "RandomD3"
+    ],
+    "attackVisuals": [
+      "BoltThrower",
+      "Canon",
+      "Catapult",
+      "Fireball",
+      "ShadowBolt",
+      "Thunderstrike",
+      "MarksmanRifle",
+      "ThousandMouths",
+      "ExplosiveCharges",
+      "FireBreath",
+      "HuntersBow",
+      "ChariotBows",
+      "TriceratopsCrew",
+      "Flamers"
+    ]
+  },
   "appliesTo": [
     "ownerUnit",
     "opponent"
@@ -2026,10 +2064,17 @@
     "minPointsCost": 1,
     "maxPointsCost": 2000,
     "maxStatModifier": 10,
-    "maxMovementModifier": 20.0,
+    "maxMovementModifier": 20,
     "maxCombatScoreBonus": 10,
-    "maxModelScale": 8.0,
-    "maxRiderOffset": 2.0,
+    "maxAbilityCharges": 9,
+    "maxAbilityDuration": 6,
+    "maxAbilityRange": 999,
+    "maxHealDice": 6,
+    "maxHealBonus": 10,
+    "maxAttackPower": 10,
+    "maxAttackCount": 20,
+    "maxModelScale": 8,
+    "maxRiderOffset": 2,
     "maxImagePixels": 2048,
     "maxImageBytes": 4194304,
     "maxPreviewBytes": 1048576,

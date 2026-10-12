@@ -34,9 +34,9 @@ python -m http.server
 ```
 
 Opening `index.html` straight from disk also works, but the browser will not let the page read
-`catalog.v1.json` next to it, so it asks you to pick that file by hand.
+`catalog.v2.json` next to it, so it asks you to pick that file by hand.
 
-## catalog.v1.json
+## catalog.v2.json
 
 Describes what the current SOVL build understands: model types, the built-in unit properties, the
 effect kinds and conditions you can assemble, army sizes, the colour palette, and every limit your mod
