@@ -14,6 +14,12 @@ let mod = null;
 /** Uploaded PNGs: path -> { bytes, width, height, url }. Kept out of the draft; see saveDraft. */
 const images = new Map();
 
+/**
+ * The game's Workshop link (workshop.json), carried from an opened mod into the next export. Without it,
+ * reinstalling an export made Publish create a second Workshop item instead of updating the first.
+ */
+let workshopLink = null;
+
 let selection = { kind: 'mod' };
 
 function blankMod() {
@@ -133,8 +139,15 @@ function field(label, control, hint) {
     hint ? el('span', { class: 'hint' }, hint) : null);
 }
 
+// Nothing in the detail pane is laid out from what is typed into its own text fields, so hold the pane
+// still while typing, as numberInput does. Rebuilding it per key broke dead keys, IME input and Ctrl+Z.
+function typing(onChange, value) {
+  keepDetail = true;
+  try { onChange(value); } finally { keepDetail = false; }
+}
+
 function textInput(value, onChange, placeholder = '') {
-  return el('input', { type: 'text', value: value ?? '', placeholder, oninput: (e) => onChange(e.target.value) });
+  return el('input', { type: 'text', value: value ?? '', placeholder, oninput: (e) => typing(onChange, e.target.value) });
 }
 
 // Ids cannot carry surrounding whitespace, but trimming on every keystroke makes a typed space vanish
@@ -143,7 +156,7 @@ function textInput(value, onChange, placeholder = '') {
 function idInput(value, onChange) {
   return el('input', {
     type: 'text', value: value ?? '',
-    oninput: (e) => onChange(e.target.value),
+    oninput: (e) => typing(onChange, e.target.value),
     onchange: (e) => {
       const trimmed = e.target.value.trim();
       if (trimmed === e.target.value) return;
@@ -176,16 +189,72 @@ function numberInput(value, onChange, { min, max, step } = {}) {
   });
 }
 
+// A select always shows something, so a value the model does not hold yet must be committed rather than
+// merely displayed: picking the option already shown fires no change event, and a select with a single
+// option (Deployment's "ambusher") could never be set at all. A value that is set but no longer offered -
+// a renamed unit, a removed image - is shown as missing instead of quietly retargeted to the first option.
+// The mod's own enumerated fields are already filled before anything is drawn (fillShownValues); this covers
+// the rest.
 function select(value, options, onChange, { allowEmpty = false } = {}) {
   const node = el('select', { onchange: (e) => onChange(e.target.value) });
+  const missing = value === undefined || value === null || value === '';
   if (allowEmpty) node.append(el('option', { value: '' }, '(none)'));
+  if (!missing && !options.includes(value)) {
+    node.append(el('option', { value, selected: 'selected' }, `${value} (missing)`));
+  }
   for (const option of options) {
     const opt = el('option', { value: option }, option);
     if (option === value) opt.selected = true;
     node.append(opt);
   }
-  if (allowEmpty && !options.includes(value)) node.value = '';
+  if (missing && allowEmpty) node.value = '';
+  // Deferred so the handler's own render() does not run inside the render building this node.
+  if (missing && !allowEmpty && options.length) queueMicrotask(() => onChange(options[0]));
   return node;
+}
+
+const PROPERTY_GROUPS = [
+  ['UnitPropertyGeneral', 'Rules'],
+  ['UnitPropertyRangedAttack', 'Ranged attacks'],
+  ['UnitPropertyWeaponSet', 'Weapon sets'],
+  ['UnitPropertyCommanderAbility', 'Commander abilities (characters only)'],
+  ['UnitPropertySpell', 'Spells (use a spellList)'],
+  ['Enchantment', 'Magic weapons and items'],
+  ['UnitBlessing', 'Blessings'],
+];
+
+// Properties by readable name, grouped by what they are. A flat list of 270 raw ids hid what each one was
+// ("ccw" is the Close Combat Weapon) and let spells and commander abilities land on regiments.
+function propertyPicker(value, onChange, { allowEmpty = true } = {}) {
+  const node = el('select', { onchange: (e) => onChange(e.target.value) });
+  const own = mod.faction.properties;
+  const known = new Set([...own.map((p) => p.id), ...catalog.properties.map((p) => p.id)]);
+
+  if (allowEmpty) node.append(el('option', { value: '' }, '(pick a property)'));
+  if (value && !known.has(value)) node.append(el('option', { value, selected: 'selected' }, `${value} (missing)`));
+
+  const option = (id, label) => el('option', { value: id, selected: id === value ? 'selected' : false }, label);
+  if (own.length) {
+    node.append(el('optgroup', { label: 'Your properties' }, own.map((p) => option(p.id, p.displayName || p.id))));
+  }
+  for (const [type, label] of PROPERTY_GROUPS) {
+    const members = catalog.properties.filter((p) => p.type === type).sort((a, b) => a.name.localeCompare(b.name));
+    if (members.length) node.append(el('optgroup', { label }, members.map((p) => option(p.id, `${p.name} (${p.id})`))));
+  }
+  const grouped = new Set(PROPERTY_GROUPS.map(([t]) => t));
+  const rest = catalog.properties.filter((p) => !grouped.has(p.type));
+  if (rest.length) node.append(el('optgroup', { label: 'Other' }, rest.map((p) => option(p.id, `${p.name} (${p.id})`))));
+
+  if (!value && allowEmpty) node.value = '';
+  if (!value && !allowEmpty) queueMicrotask(() => onChange(node.value));
+  return node;
+}
+
+function describeProperty(id) {
+  const own = mod.faction.properties.find((p) => p.id === id);
+  if (own) return own.description || '';
+  const builtin = catalog.properties.find((p) => p.id === id);
+  return builtin ? builtin.description : '';
 }
 
 function checkbox(value, label, onChange) {
@@ -212,11 +281,19 @@ function allSections() {
 }
 
 async function exportZip() {
-  const blob = makeZip(exportFiles(mod, catalog, images));
+  const files = exportFiles(mod, catalog, images);
+  if (workshopLink) files.push({ name: 'workshop.json', data: workshopLink });
+  const blob = makeZip(files);
   const link = el('a', { href: URL.createObjectURL(blob), download: `${mod.modId}.zip` });
   document.body.append(link);
   link.click();
   link.remove();
+
+  // Unzipping into the right place was the first wall most people hit, so say how right after export.
+  document.getElementById('installName').textContent = mod.displayName || mod.modId;
+  document.getElementById('installZip').textContent = `${mod.modId}.zip`;
+  document.getElementById('installId').textContent = mod.modId;
+  document.getElementById('installDialog').showModal();
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -278,15 +355,75 @@ function render() {
 
 function renderProblems() {
   const problems = validate();
+  const notes = advise();
   const bar = document.getElementById('problems');
-  const wasOpen = bar.querySelector('details')?.open ?? false;
+  const wasOpen = bar.querySelector('details.blocking')?.open ?? false;
+  const notesOpen = bar.querySelector('details.notes')?.open ?? false;
   bar.className = problems.length ? 'problems bad' : 'problems good';
-  bar.replaceChildren(
+  bar.replaceChildren(...[
     problems.length
-      ? el('details', { open: wasOpen ? 'open' : false },
+      ? el('details', { class: 'blocking', open: wasOpen ? 'open' : false },
           el('summary', {}, `${problems.length} problem${problems.length === 1 ? '' : 's'} to fix before this mod will load`),
           el('ul', {}, problems.map((p) => el('li', {}, p))))
-      : el('span', {}, 'Ready to export.'));
+      : el('span', {}, 'Ready to export.'),
+    notes.length
+      ? el('details', { class: 'notes', open: notesOpen ? 'open' : false },
+          el('summary', {}, `${notes.length} thing${notes.length === 1 ? '' : 's'} worth checking (the mod still loads)`),
+          el('ul', {}, notes.map((p) => el('li', {}, p))))
+      : null,
+  ].filter(Boolean));
+}
+
+/**
+ * Things that load fine but rarely do what the author meant - the surprises players ran into on Discord.
+ * Unlike validate(), none of these stop an export.
+ */
+function advise() {
+  const notes = [];
+  const sizes = catalog.armySizes.map((s) => s.name);
+
+  for (const section of allSections()) {
+    for (const size of sizes) {
+      const limit = section.unitLimits[size];
+      if (limit && limit.maxCount === 0 && (section === mod.faction.characters || section === mod.faction.battleLine)) {
+        notes.push(`${section.sectionName} allows no units in ${size}, so no ${size} army can be built.`);
+      }
+    }
+    for (const unit of section.units) {
+      if (unit.kind === 'regiment') {
+        // Unrestricted has no points cap, so any size there is expected rather than an oversight.
+        const unset = sizes.filter((s) => s !== 'Unrestricted' && !unit.modelCountLimits?.[s]);
+        if (unset.length && unset.length < sizes.length - 1) {
+          notes.push(`${unit.displayName || unit.unitID}: no model count for ${unset.join(', ')}, so it can be taken there at 1-100 models.`);
+        }
+      }
+      for (const selector of unit.properties ?? []) {
+        for (const id of [selector.propertyId, ...(selector.propertyIds ?? [])].filter(Boolean)) {
+          const type = catalog.properties.find((p) => p.id === id)?.type;
+          if (type === 'UnitPropertyCommanderAbility' && unit.kind === 'regiment') {
+            notes.push(`${unit.displayName || unit.unitID}: ${id} is a commander ability and does nothing on a regiment.`);
+          }
+          if (type === 'UnitPropertySpell' && selector.kind !== 'spellList') {
+            notes.push(`${unit.displayName || unit.unitID}: give spells through a spellList, not as a plain property (${id}).`);
+          }
+        }
+      }
+      if ((unit.models ?? []).length === 0) {
+        notes.push(`${unit.displayName || unit.unitID}: no model graphics; it is drawn as plain bases on the battlefield.`);
+      }
+      if ((unit.models ?? []).filter((m) => !m.propertyId).length > 1) {
+        notes.push(`${unit.displayName || unit.unitID}: only the first model graphics card without "Only with" is used. Put variety in its Sprites list instead.`);
+      }
+    }
+  }
+
+  for (const property of mod.faction.properties) {
+    const used = allSections().some((s) => s.units.some((u) => (u.properties ?? []).some((sel) =>
+      sel.propertyId === property.id || (sel.propertyIds ?? []).includes(property.id))));
+    if (!used) notes.push(`${property.displayName || property.id} is not given to any unit.`);
+  }
+
+  return notes;
 }
 
 function outlineItem(label, sel, extra) {
@@ -417,19 +554,125 @@ function renderProperty(property, index) {
     property.effects.map((effect, i) => renderEffect(effect, () => { property.effects.splice(i, 1); render(); })));
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Plain-language help. The catalog gives the ids the game reads; these say what each one does, because
+// the ids alone sent people down the wrong path (extraAttacks vs extraShots, what firstRound means,
+// whether a stat modifier sets or adds). Anything missing here simply shows no help.
+// ---------------------------------------------------------------------------------------------------
+
+const HELP = {
+  effects: {
+    combatScore: 'Adds Value to this side\'s combat result in every melee it fights.',
+    damageSave: 'Changes the damage saves this unit rolls when it is hit.',
+    deployment: 'Changes how the unit deploys.',
+    discipline: 'Changes this unit\'s Discipline (break) tests.',
+    doubleWounds: 'Every unsaved hit this unit inflicts causes two wounds.',
+    extraRankAttacks: 'One more rank of models fights in melee.',
+    ignoreDifficultTerrain: 'Moves through difficult terrain without slowing down.',
+    ignoreImpassableTerrain: 'Moves over impassable terrain.',
+    movement: 'Adds Amount inches to the unit\'s move, or replaces its move with Amount.',
+    rangedAttackBonus: 'Changes this unit\'s shooting. Collected from "opponent" changes shooting aimed at this unit instead.',
+    regeneration: 'Can recover lost wounds.',
+    statModifier: 'Adds Value to a stat while the condition holds. Negative values lower it. It never sets the stat outright.',
+    toHit: 'Changes this unit\'s rolls to hit in melee.',
+  },
+  effectTypes: {
+    damageSave: {
+      rerollFailures: 'Re-roll failed saves.',
+      rerollSuccesses: 'Re-roll successful saves. Use with Collected from "opponent" so enemies hit by this unit must re-roll their saves.',
+      modified: 'Adds Value to the save roll. Positive makes saves easier.',
+      capAt4plus: 'Saves can never be better than 4+.',
+      reRollSixes: 'Re-roll saves that roll a 6.',
+      reRollOnes: 'Re-roll saves that roll a 1.',
+    },
+    deployment: {
+      ambusher: 'Deploys as an ambusher instead of at the start. This is the only deployment type for now.',
+    },
+    discipline: {
+      reroll: 'Re-roll failed Discipline tests.',
+      autoSuccess: 'Always passes Discipline tests.',
+      unmodified: 'Ignores the combat result when testing.',
+      rerollSuccesses: 'Re-roll passed Discipline tests (put this on enemies with "opponent").',
+      crumbleD3: 'Never flees: instead of testing, it loses D3 wounds (undead-style crumbling).',
+      crumble2D3: 'Never flees: instead of testing, it loses 2D3 wounds.',
+      reduceCrumble: 'Crumbles one wound less.',
+    },
+    rangedAttackBonus: {
+      extraRange: 'Adds Value inches to the weapon\'s range. Negative shortens it.',
+      toHitMod: 'Adds Value to rolls to hit. Positive makes hitting easier.',
+      rerollMisses: 'Re-roll shots that miss.',
+      rerollHits: 'Re-roll shots that hit (put this on enemies with "opponent").',
+      extraAttacks: 'Value more shots for every model that shoots.',
+      rerollOnes: 'Re-roll to-hit rolls of 1.',
+      plusPower: 'Adds Value to the weapon\'s Power.',
+      cover: 'Shots count the target as being in cover.',
+      extraShots: 'Shots are multiplied by 1 + Value, so Value 1 doubles them.',
+      ignoreCover: 'Ignores the target\'s cover.',
+      extraRank: 'One more rank of models can shoot.',
+    },
+    toHit: {
+      rerollMisses: 'Re-roll attacks that miss.',
+      rerollHits: 'Re-roll attacks that hit (put this on enemies with "opponent").',
+      plusOne: '+1 to hit.',
+      minusOne: '-1 to hit (put this on enemies with "opponent").',
+      rerollOnes: 'Re-roll to-hit rolls of 1.',
+    },
+  },
+  conditions: {
+    charging: 'This unit charged into this combat.',
+    inCombat: 'This unit is in melee.',
+    firstRound: 'The first round of each combat, whoever charged.',
+    flankOrRear: 'The attack lands on the enemy\'s flank or rear.',
+    melee: 'A melee attack.',
+    ranged: 'A shooting attack.',
+    monstrousTarget: 'The enemy is a monster or monstrous infantry.',
+    withCommander: 'A commander has joined this unit.',
+    targetUnitType: 'The enemy is one of the ticked unit types.',
+    allOf: 'Every condition below holds.',
+    anyOf: 'At least one condition below holds.',
+  },
+  selectors: {
+    builtin: 'Always has this property.',
+    optional: 'May buy this property for Extra points when building a list.',
+    pickOne: 'Picks one of these when building a list, each with its own cost.',
+    spellList: 'A spellcaster: picks a number of spells from the ones listed.',
+    enchantments: 'May buy magic weapons and/or magic items.',
+    banners: 'May carry a magic banner.',
+  },
+};
+
+// A new kind starts from its own defaults. Carrying the old fields over left a damageSave's effectType on a
+// deployment effect, which the game then rejected as "nothing selected".
+function resetEffect(effect, kind) {
+  const { isAura, when } = effect;
+  for (const key of Object.keys(effect)) delete effect[key];
+  Object.assign(effect, { kind }, isAura ? { isAura } : {}, when ? { when } : {});
+
+  const info = catalog.effects.find((e) => e.kind === kind);
+  for (const name of info?.fields ?? []) {
+    if (name === 'stat') effect.stat = catalog.stats[0];
+    else if (name === 'effectType') effect.effectType = info.effectTypeValues[0];
+    else if (name === 'value') effect.value = 1;
+    else if (name === 'amount') effect.amount = 0;
+    else if (name === 'appliesTo') effect.appliesTo = 'ownerUnit';
+  }
+}
+
 function renderEffect(effect, onRemove) {
   const info = catalog.effects.find((e) => e.kind === effect.kind);
   const rows = [
     el('div', { class: 'row' },
-      select(effect.kind, catalog.effects.map((e) => e.kind), (v) => { effect.kind = v; render(); }),
+      select(effect.kind, catalog.effects.map((e) => e.kind), (v) => { resetEffect(effect, v); render(); }),
       button('remove', onRemove, 'tiny danger')),
+    HELP.effects[effect.kind] ? el('p', { class: 'hint' }, HELP.effects[effect.kind]) : null,
   ];
 
   const fields = info?.fields ?? [];
 
-  if (fields.includes('stat')) rows.push(field('Stat', select(effect.stat ?? catalog.stats[0], catalog.stats, (v) => { effect.stat = v; saveDraft(); })));
+  if (fields.includes('stat')) rows.push(field('Stat', select(effect.stat, catalog.stats, (v) => { effect.stat = v; saveDraft(); })));
   if (fields.includes('effectType')) {
-    rows.push(field('Type', select(effect.effectType ?? info.effectTypeValues[0], info.effectTypeValues, (v) => { effect.effectType = v; saveDraft(); })));
+    rows.push(field('Type', select(effect.effectType, info.effectTypeValues, (v) => { effect.effectType = v; render(); }),
+      HELP.effectTypes[effect.kind]?.[effect.effectType] ?? ''));
   }
   if (fields.includes('value')) rows.push(field('Value', numberInput(effect.value ?? 0, (v) => { effect.value = v; render(); })));
   if (fields.includes('amount')) rows.push(field('Amount', numberInput(effect.amount ?? 0, (v) => { effect.amount = v; saveDraft(); }, { step: 0.5 })));
@@ -456,7 +699,8 @@ function renderCondition(owner, key, depth) {
 
   if (!condition) return el('div', { class: 'row' }, chooser, el('span', { class: 'hint' }, 'always'));
 
-  const rows = [el('div', { class: 'row' }, chooser)];
+  const rows = [el('div', { class: 'row' }, chooser,
+    HELP.conditions[condition.kind] ? el('span', { class: 'hint' }, HELP.conditions[condition.kind]) : null)];
 
   if (condition.kind === 'targetUnitType') {
     rows.push(el('div', { class: 'chips' }, catalog.unitTypes.map((type) =>
@@ -494,14 +738,22 @@ function renderSection(section, sectionIndex) {
       removable ? '' : 'Commanders and BattleLine are required and cannot be removed.'),
 
     el('h3', {}, 'How many units of this section an army may take'),
+    el('p', { class: 'hint' }, 'An army size left blank has no limit (0 to 99). Set the maximum to 0 to keep this section out of that size.'),
     catalog.armySizes.map((size) => {
-      const limit = section.unitLimits[size.name] ?? { minCount: 0, maxCount: 0 };
-      section.unitLimits[size.name] = limit;
+      // Only write a size once it is edited: viewing the section used to store 0-0 for every blank size,
+      // which silently banned the section from it.
+      const limit = section.unitLimits[size.name];
+      const commit = (key, v) => {
+        section.unitLimits[size.name] = section.unitLimits[size.name] ?? { minCount: 0, maxCount: 99 };
+        section.unitLimits[size.name][key] = v;
+        render();
+      };
       return el('div', { class: 'row' },
         el('span', { class: 'label' }, `${size.name} (${size.points}pts)`),
-        numberInput(limit.minCount, (v) => { limit.minCount = v; saveDraft(); }, { min: 0 }),
+        numberInput(limit?.minCount ?? 0, (v) => commit('minCount', v), { min: 0 }),
         el('span', {}, 'to'),
-        numberInput(limit.maxCount, (v) => { limit.maxCount = v; saveDraft(); }, { min: 0 }));
+        numberInput(limit?.maxCount ?? 99, (v) => commit('maxCount', v), { min: 0 }),
+        limit ? button('clear', () => { delete section.unitLimits[size.name]; render(); }, 'tiny') : el('span', { class: 'hint' }, 'no limit'));
     }));
 }
 
@@ -510,7 +762,9 @@ function renderUnit(unit, sel) {
 
   const imagePaths = [...images.keys()];
   const section = allSections()[sel.sectionIndex];
-  const otherUnits = loadedSections(mod).flatMap((s) => s.units ?? []).filter((u) => u !== unit);
+  // A retinue must be a regiment: the game refuses a character there. Mounts are offered too, though the editor
+  // cannot edit their section.
+  const regiments = loadedSections(mod).flatMap((s) => s.units ?? []).filter((u) => u !== unit && u.kind === 'regiment');
 
   const parts = [
     el('h2', {}, 'Unit',
@@ -521,7 +775,7 @@ function renderUnit(unit, sel) {
       else { unit.retinueOptions = unit.retinueOptions ?? []; delete unit.modelCountLimits; }
       render();
     })),
-    field('Unit id', idInput(unit.unitID, (v) => { unit.unitID = v; render(); }), `Must start with "${mod.modId}:".`),
+    field('Unit id', idInput(unit.unitID, (v) => { renameUnit(unit, v); render(); }), `Must start with "${mod.modId}:".`),
     field('Display name', textInput(unit.displayName, (v) => { unit.displayName = v; render(); })),
     field('Points', numberInput(unit.pointsCost, (v) => { unit.pointsCost = v; render(); }, { min: catalog.limits.minPointsCost, max: catalog.limits.maxPointsCost })),
     field('Model type', select(unit.modelType, catalog.modelTypes.map((m) => m.name), (v) => { unit.modelType = v; saveDraft(); }),
@@ -544,7 +798,9 @@ function renderUnit(unit, sel) {
   ];
 
   if (unit.kind === 'regiment') {
-    parts.push(el('h3', {}, 'Models per regiment'));
+    parts.push(el('h3', {}, 'Models per regiment'),
+      el('p', { class: 'hint' }, 'An unticked army size does not ban the unit: it can be taken there at any size from 1 to 100 models. ' +
+        'To keep a unit out of an army size, limit its section in that size instead.'));
     unit.modelCountLimits = unit.modelCountLimits ?? {};
     parts.push(...catalog.armySizes.map((size) => {
       const limit = unit.modelCountLimits[size.name];
@@ -566,10 +822,10 @@ function renderUnit(unit, sel) {
     unit.retinueOptions = unit.retinueOptions ?? [];
     parts.push(...unit.retinueOptions.map((retinue, i) =>
       el('div', { class: 'row' },
-        select(retinue.unitID, otherUnits.map((u) => u.unitID), (v) => { retinue.unitID = v; render(); }),
+        select(retinue.unitID, regiments.map((u) => u.unitID), (v) => { retinue.unitID = v; render(); }),
         checkbox(retinue.isMount, 'as a mount', (v) => { retinue.isMount = v; saveDraft(); }),
         button('remove', () => { unit.retinueOptions.splice(i, 1); render(); }, 'tiny'))));
-    parts.push(button('+ retinue', () => { unit.retinueOptions.push({ unitID: otherUnits[0]?.unitID ?? '' }); render(); }, 'tiny'));
+    parts.push(button('+ retinue', () => { unit.retinueOptions.push({ unitID: regiments[0]?.unitID ?? '' }); render(); }, 'tiny'));
   }
 
   parts.push(el('h3', {}, 'Properties'),
@@ -580,13 +836,28 @@ function renderUnit(unit, sel) {
   parts.push(button('+ property', () => { unit.properties.push({ kind: 'builtin', propertyId: '' }); render(); }, 'tiny'));
 
   parts.push(el('h3', {}, 'Model graphics'),
-    el('p', { class: 'hint' }, 'Sprites drawn per model on the battlefield. Add a few for variety.'));
+    el('p', { class: 'hint' }, 'Sprites drawn per model on the battlefield. One card is the default look; for variety add several sprites to it. ' +
+      'Add more cards with "Only with" set to change how the unit looks when an option is picked, such as a weapon.'));
 
+  // The options a player can pick on this unit, which is what "Only with" can key on.
+  const optionIds = unit.properties.flatMap((s) => (s.kind === 'optional' ? [s.propertyId] : s.kind === 'pickOne' ? s.propertyIds ?? [] : []))
+    .filter(Boolean);
   unit.models = unit.models ?? [];
-  parts.push(...unit.models.map((models, i) => renderModels(models, imagePaths, () => { unit.models.splice(i, 1); render(); })));
+  parts.push(...unit.models.map((models, i) => renderModels(models, imagePaths, optionIds, () => { unit.models.splice(i, 1); render(); })));
   parts.push(button('+ model graphics', () => { unit.models.push({ images: [], scale: 1.85 }); render(); }, 'tiny'));
 
   return el('div', {}, parts);
+}
+
+// Retinues point at units by id, so a rename carries them along instead of leaving them dangling.
+function renameUnit(unit, id) {
+  const old = unit.unitID;
+  unit.unitID = id;
+  for (const other of allSections().flatMap((s) => s.units)) {
+    for (const retinue of other.retinueOptions ?? []) {
+      if (retinue.unitID === old) retinue.unitID = id;
+    }
+  }
 }
 
 function describeModelType(name) {
@@ -596,15 +867,15 @@ function describeModelType(name) {
 
 function renderSelector(selector, onRemove) {
   const all = [...catalog.properties.map((p) => p.id), ...mod.faction.properties.map((p) => p.id)];
-  const chosen = catalog.properties.find((p) => p.id === selector.propertyId);
 
   return el('div', { class: 'card thin' },
     el('div', { class: 'row' },
       select(selector.kind, catalog.propertySelectorKinds, (v) => { setSelectorKind(selector, v, catalog); render(); }),
+      el('span', { class: 'hint' }, HELP.selectors[selector.kind] ?? ''),
       button('remove', onRemove, 'tiny danger')),
     ['builtin', 'optional'].includes(selector.kind)
-      ? field('Property', select(selector.propertyId, all, (v) => { selector.propertyId = v; render(); }, { allowEmpty: true }),
-          chosen?.description ?? '')
+      ? field('Property', propertyPicker(selector.propertyId, (v) => { selector.propertyId = v; render(); }),
+          describeProperty(selector.propertyId))
       : null,
     selector.kind === 'optional'
       ? field('Extra points', numberInput(selector.cost ?? 0, (v) => { selector.cost = v; saveDraft(); }, { min: 0 }))
@@ -612,7 +883,7 @@ function renderSelector(selector, onRemove) {
     selector.kind === 'pickOne'
       ? el('div', {}, el('span', { class: 'hint' }, 'Choose between these when building a list.'),
           (selector.propertyIds ?? []).map((id, i) => el('div', { class: 'row' },
-            select(id, all, (v) => { selector.propertyIds[i] = v; render(); }),
+            propertyPicker(id, (v) => { selector.propertyIds[i] = v; render(); }, { allowEmpty: false }),
             numberInput(selector.costs?.[i] ?? 0, (v) => { selector.costs = selector.costs ?? []; selector.costs[i] = v; saveDraft(); }, { min: 0 }),
             button('remove', () => { selector.propertyIds.splice(i, 1); selector.costs?.splice(i, 1); render(); }, 'tiny'))),
           button('+ option', () => {
@@ -650,7 +921,7 @@ function renderSpellList(selector) {
     }, 'tiny'));
 }
 
-function renderModels(models, imagePaths, onRemove) {
+function renderModels(models, imagePaths, optionIds, onRemove) {
   const list = (key, label, hint) => el('div', { class: 'field' },
     el('span', { class: 'label' }, label),
     hint ? el('span', { class: 'hint' }, hint) : null,
@@ -660,7 +931,12 @@ function renderModels(models, imagePaths, onRemove) {
     button('+ image', () => { models[key] = models[key] ?? []; models[key].push(imagePaths[0] ?? ''); render(); }, 'tiny'));
 
   return el('div', { class: 'card' },
-    el('div', { class: 'row' }, el('strong', {}, 'Model graphics'), button('remove', onRemove, 'tiny danger')),
+    el('div', { class: 'row' }, el('strong', {}, models.propertyId ? `Model graphics with ${models.propertyId}` : 'Model graphics (default look)'),
+      button('remove', onRemove, 'tiny danger')),
+    field('Only with', select(models.propertyId ?? '', optionIds, (v) => {
+      if (v) models.propertyId = v; else delete models.propertyId;
+      render();
+    }, { allowEmpty: true }), 'Use this art only while the unit has that option picked. (none) is the default look.'),
     list('images', 'Sprites', 'One is picked at random per model.'),
     list('steedImages', 'Steeds (optional)', 'Adding steeds makes this cavalry: the sprites above ride on top. Draw steeds long and narrow.'),
     field('Scale', numberInput(models.scale ?? 1.85, (v) => { models.scale = v; saveDraft(); }, { step: 0.05, min: 0.1, max: catalog.limits.maxModelScale })),
@@ -682,8 +958,9 @@ function renderModels(models, imagePaths, onRemove) {
  * @param {Map<string, Uint8Array>} entries path within the mod -> bytes
  */
 async function openMod(entries) {
-  const { manifest, faction, otherFactions, images: pngs, warnings } = readModFiles(entries, catalog);
+  const { manifest, faction, otherFactions, images: pngs, workshop, warnings } = readModFiles(entries, catalog);
 
+  workshopLink = workshop;
   images.clear();
   for (const [path, bytes] of pngs) {
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
@@ -825,6 +1102,7 @@ document.getElementById('resetButton').addEventListener('click', () => {
     localStorage.removeItem(DRAFT_KEY);
     mod = blankMod();
     images.clear();
+    workshopLink = null;
     selection = { kind: 'mod' };
     render();
   }

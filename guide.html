@@ -96,8 +96,10 @@ properties you define yourself out of the effects listed further down.</p>
         <li><a href="#install">Get it into the game</a></li>
         <li><a href="#load">Load it</a></li>
         <li><a href="#publish">Publish to the Workshop</a></li>
+        <li><a href="#update">Update your Workshop item</a></li>
       </ul>
     </li>
+    <li><a href="#surprises">Common surprises</a></li>
     <li><a href="#not-yet">What is not in yet</a></li>
     <li><a href="#detail">The editor in detail</a></li>
   </ul>
@@ -187,6 +189,54 @@ the game notices and reloads at the main menu, never mid-battle.</p>
 <p>Everything in the mod folder is uploaded, so delete any stray files first — backups, source art,
 notes.</p>
 
+<h3 id="update">5. Update your Workshop item</h3>
+
+<p>Publish again from the same mod folder. As long as <code>workshop.json</code> is still in it, the game
+updates your existing item instead of making a new one. The loop:</p>
+
+<ol>
+  <li>In the editor, <strong>Open mod folder</strong> and pick your installed mod folder (or
+      <strong>Open mod.zip</strong> with your last export). The editor remembers its
+      <code>workshop.json</code> and puts it back in the next export.</li>
+  <li>Make your changes and <strong>Export mod.zip</strong>.</li>
+  <li>Extract the zip over your mod folder, replacing the files, then <strong>Reload</strong> in the Mods
+      panel and check it loads.</li>
+  <li><strong>Publish</strong>.</li>
+</ol>
+
+<p>Lost <code>workshop.json</code>? Publishing makes a second item. Delete the old one from your Workshop
+page so subscribers are not left with two.</p>
+
+<p><strong>Starting from someone else's mod</strong> — Workshop downloads live in
+<code>steamapps\workshop\content\1870300\&lt;item id&gt;</code> in your Steam library. Open that folder
+in the editor, then change the <strong>mod id</strong> before you export, so your version installs
+beside the original instead of clashing with it. You can only publish updates to items you made.</p>
+
+<h2 id="surprises">Common surprises</h2>
+
+<p>The questions that came up most on Discord.</p>
+
+<ul>
+  <li><strong>A stat modifier adds, it does not set.</strong> Value 1 on Attacks gives +1 Attacks.
+      Negative values lower the stat.</li>
+  <li><strong><code>firstRound</code> is the first round of each combat</strong>, whoever charged — not
+      the first turn of the battle. Combine it with <code>charging</code> for a charge bonus.</li>
+  <li><strong><code>extraAttacks</code> vs <code>extraShots</code>.</strong> <code>extraAttacks</code>
+      adds Value shots for every model that shoots. <code>extraShots</code> multiplies the shots by
+      1 + Value, so Value 1 doubles them.</li>
+  <li><strong>Commander abilities only work on characters.</strong> Put Demonic Possession and the like
+      on a regiment and nothing happens. The editor flags this at the bottom.</li>
+  <li><strong>Spells go in a <code>spellList</code></strong>, not as plain properties. List the spells the
+      caster can choose from and how many it knows.</li>
+  <li><strong>An unticked army size does not ban a regiment.</strong> It can then be taken at 1–100
+      models there. To keep a unit out of an army size, limit its section in that size.</li>
+  <li><strong>The mod shows (failed)?</strong> Select it in the Mods panel: each problem is one line,
+      naming the unit or property and the field. Fix them in the editor, export, extract and
+      <strong>Reload</strong>.</li>
+  <li><strong>The icon on the Workshop page is <code>preview.png</code></strong>. A unit's icon is the
+      heraldry on its base; its portrait is the picture in the army list.</li>
+</ul>
+
 <h2 id="not-yet">What is not in yet</h2>
 
 <p>An honest list of the edges. Some of these are coming, some are deliberate.</p>
@@ -214,6 +264,8 @@ mod is used in a battle. Restart the game to get them back.</p>
       cannot make new ones.</li>
   <li><strong>No spells or magic items.</strong> You can give a unit a built-in spell list, but not
       write new spells.</li>
+  <li><strong>No "not" and no "was charged" condition yet.</strong> You can say <em>charging</em> but
+      not <em>not charging</em>, and there is no condition for the unit that received the charge.</li>
   <li><strong>No custom ranged attack profiles.</strong> You can modify existing ranged attacks with
       effects, not define a new weapon.</li>
   <li><strong>Points costs are not checked.</strong> The game will happily load a 10-point giant. Cost
@@ -329,7 +381,9 @@ commander).</p>
 </ul>
 
 <p><strong>Regiments</strong> additionally set <strong>models per regiment</strong> per army size — tick
-an army size to allow the unit there at all, then give the minimum and maximum model count.</p>
+an army size and give the minimum and maximum model count. An unticked size does not ban the unit: it can
+be taken there at any size from 1 to 100 models. To keep a unit out of an army size, limit its section in
+that size instead.</p>
 
 <p><strong>Characters</strong> instead get a <strong>retinue</strong>: which regiments the commander may
 join, or which mounts it may ride (tick <em>as a mount</em>). Tick <strong>fights alone</strong> for a
@@ -358,6 +412,10 @@ built-in ones show their description once selected.</p>
 
 <p>The sprites drawn per model on the battlefield. Add several <strong>sprites</strong> and one is
 picked at random per model, which is what stops a regiment looking like a photocopy. Up to 8.</p>
+
+<p>The first card is the unit's default look. To change the look when the player picks an option — a
+flamer, a great weapon — add another card and set <strong>Only with</strong> to that option. Only options
+the unit can buy (<code>optional</code> or <code>pickOne</code>) are offered there.</p>
 
 <p><strong>Steeds</strong> are what make a unit cavalry: add steed sprites and the sprites above ride on
 top of them. Draw steeds long and narrow — they render wider than they are tall.</p>

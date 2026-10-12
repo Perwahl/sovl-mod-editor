@@ -222,9 +222,9 @@ export function validate(mod, catalog, imagePaths) {
         problems.push(`${unit.unitID}: characters need at least one retinue, or soloCommander.`);
       }
       for (const retinue of unit.retinueOptions ?? []) {
-        if (!unitIds.has(retinue.unitID) && !sections.some((s) => s.units?.some((u) => u.unitID === retinue.unitID))) {
-          problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
-        }
+        const target = sections.flatMap((s) => s.units ?? []).find((u) => u.unitID === retinue.unitID);
+        if (!target) problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
+        else if (target.kind !== 'regiment') problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is a character; a retinue must be a regiment.`);
       }
       for (const models of unit.models ?? []) {
         if (!models.images?.length) problems.push(`${unit.unitID}: model graphics need at least one image.`);
@@ -366,9 +366,10 @@ const MANIFEST = 'manifest.json';
  *
  * @param {Map<string, Uint8Array>} entries path -> bytes
  * @returns {{ manifest: object, faction: object, otherFactions: { path: string, text: string }[],
- *   images: Map<string, Uint8Array>, warnings: string[] }} faction is the first faction, the one the editor edits;
- *   otherFactions are the rest, as their files' text, to be written back unchanged. images are keyed by their path
- *   within the mod, which is also how the faction refers to them. warnings say what the editor cannot edit.
+ *   images: Map<string, Uint8Array>, workshop: Uint8Array|null, warnings: string[] }} faction is the first faction,
+ *   the one the editor edits; otherFactions are the rest, as their files' text, to be written back unchanged. images
+ *   are keyed by their path within the mod, which is also how the faction refers to them. workshop is the game's
+ *   workshop.json, if the mod has one. warnings say what the editor cannot edit.
  */
 export function readModFiles(entries, catalog) {
   const files = modRootFiles(entries);
@@ -427,7 +428,11 @@ export function readModFiles(entries, catalog) {
 
   const images = new Map([...files].filter(([path]) => path.toLowerCase().endsWith('.png')));
 
-  return { manifest, faction, otherFactions, images, warnings };
+  // The game's link to the mod's Workshop item. Carried into the next export: without it, reinstalling an export
+  // made Publish create a second Workshop item instead of updating the first.
+  const workshop = files.get(stored.get('workshop.json')) ?? null;
+
+  return { manifest, faction, otherFactions, images, workshop, warnings };
 }
 
 /** The files under the folder that holds manifest.json, keyed by their path from there. */
