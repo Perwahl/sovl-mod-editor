@@ -695,17 +695,11 @@ async function openZipFile(file) {
 }
 
 async function openFolderFiles(files) {
+  // A picked folder yields paths like "ashen/manifest.json". readModFiles finds where the mod starts, which
+  // may be further down when the folder picked was the one above it.
   const entries = new Map();
-
-  // A picked folder yields paths like "ashen/manifest.json"; the mod's own paths start below that.
-  const roots = new Set(files.map((f) => f.webkitRelativePath.split('/')[0]));
-  const strip = roots.size === 1 ? [...roots][0] + '/' : '';
-
   for (const file of files) {
-    const path = file.webkitRelativePath.startsWith(strip)
-      ? file.webkitRelativePath.slice(strip.length)
-      : file.webkitRelativePath;
-    entries.set(path, new Uint8Array(await file.arrayBuffer()));
+    entries.set(file.webkitRelativePath, new Uint8Array(await file.arrayBuffer()));
   }
 
   await openMod(entries);
