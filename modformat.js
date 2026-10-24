@@ -27,9 +27,90 @@ export function referencedImages(mod) {
   return paths;
 }
 
-/** What choosing a property kind in the unit's property list does to that entry. */
+/** The built-in spells, by id. A mod cannot define spells of its own: its properties are effects, not spells. */
+export function spellIds(catalog) {
+  return catalog.properties.filter((p) => p.type === 'UnitPropertySpell').map((p) => p.id);
+}
+
+/**
+ * What choosing a property kind in the unit's property list does to that entry. Each kind starts out as
+ * something the game can load. Fields another kind left behind stay, so switching back loses nothing; the
+ * export writes only the current kind's fields (see exportSelector).
+ */
 export function setSelectorKind(selector, kind, catalog) {
   selector.kind = kind;
+  switch (kind) {
+    case 'spellList':
+      if (!selector.propertyIds?.length) selector.propertyIds = spellIds(catalog).slice(0, 1);
+      selector.spellCount = selector.spellCount ?? 1;
+      break;
+    case 'enchantments':
+      // Neither ticked would offer nothing at all, so start with both.
+      if (!selector.weapons && !selector.items) {
+        selector.weapons = true;
+        selector.items = true;
+      }
+      break;
+    case 'banners':
+      selector.eliteUnit = selector.eliteUnit ?? false;
+      break;
+  }
+}
+
+/**
+ * One unit property entry in the shape ModFactionBuilder.BuildSelector reads for its kind, and nothing else.
+ * The game matches kinds case-insensitively, so this does too.
+ */
+export function exportSelector(selector) {
+  const kind = selector.kind;
+  switch ((kind ?? '').toLowerCase()) {
+    case 'builtin':
+      return { kind, propertyId: selector.propertyId };
+    case 'optional':
+      return { kind, propertyId: selector.propertyId, cost: selector.cost ?? 0 };
+    case 'pickone': {
+      const propertyIds = selector.propertyIds ?? [];
+      return { kind, propertyIds, costs: propertyIds.map((_, i) => selector.costs?.[i] ?? 0) };
+    }
+    case 'spelllist':
+      return { kind, propertyIds: selector.propertyIds ?? [], spellCount: selector.spellCount ?? 1 };
+    case 'enchantments':
+      return { kind, weapons: !!selector.weapons, items: !!selector.items };
+    case 'banners':
+      return { kind, eliteUnit: !!selector.eliteUnit };
+    default:
+      return selector;
+  }
+}
+
+/** The problems with one unit property entry, the same ones BuildSelector would refuse the mod for. */
+function selectorProblems(selector, owner, knownIds, spells) {
+  const problems = [];
+  const ids = selector.propertyIds ?? [];
+
+  switch ((selector.kind ?? '').toLowerCase()) {
+    case 'builtin':
+    case 'optional':
+      if (!selector.propertyId) problems.push(`${owner}: a ${selector.kind} property has no property chosen.`);
+      else if (!knownIds.has(selector.propertyId)) problems.push(`${owner}: property "${selector.propertyId}" does not exist.`);
+      break;
+    case 'pickone':
+      if (!ids.length) problems.push(`${owner}: a pickOne property needs at least one option.`);
+      for (const id of ids) if (!knownIds.has(id)) problems.push(`${owner}: property "${id}" does not exist.`);
+      break;
+    case 'spelllist':
+      if (!ids.length) problems.push(`${owner}: a spell list needs at least one spell.`);
+      for (const id of ids) if (!spells.has(id)) problems.push(`${owner}: spell list entry "${id}" is not a spell.`);
+      break;
+    case 'enchantments':
+      if (!selector.weapons && !selector.items) problems.push(`${owner}: enchantments must offer magic weapons, items or both.`);
+      break;
+    case 'banners':
+      break;
+    default:
+      problems.push(`${owner}: unknown property kind "${selector.kind}".`);
+  }
+  return problems;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -58,6 +139,8 @@ export function validate(mod, catalog, imagePaths) {
 
   const sections = allSections(mod);
   const unitIds = new Set();
+  const knownPropertyIds = new Set([...catalog.properties.map((p) => p.id), ...faction.properties.map((p) => p.id)]);
+  const spells = new Set(spellIds(catalog));
 
   for (const section of sections) {
     for (const unit of section.units) {
@@ -92,6 +175,9 @@ export function validate(mod, catalog, imagePaths) {
       }
       for (const models of unit.models ?? []) {
         if (!models.images?.length) problems.push(`${unit.unitID}: model graphics need at least one image.`);
+      }
+      for (const selector of [unit.weaponSet, unit.rangedAttack, ...(unit.properties ?? [])]) {
+        if (selector) problems.push(...selectorProblems(selector, unit.unitID, knownPropertyIds, spells));
       }
     }
   }
@@ -159,10 +245,22 @@ export function buildFactionJson(mod) {
     icons: faction.icons,
     defaultColors: faction.defaultColors,
     properties: faction.properties,
-    characters: faction.characters,
-    battleLine: faction.battleLine,
-    sections: faction.sections,
+    characters: exportSection(faction.characters),
+    battleLine: exportSection(faction.battleLine),
+    sections: faction.sections.map(exportSection),
   };
+}
+
+function exportSection(section) {
+  return { ...section, units: section.units.map(exportUnit) };
+}
+
+function exportUnit(unit) {
+  const exported = { ...unit };
+  if (unit.properties) exported.properties = unit.properties.map(exportSelector);
+  if (unit.weaponSet) exported.weaponSet = exportSelector(unit.weaponSet);
+  if (unit.rangedAttack) exported.rangedAttack = exportSelector(unit.rangedAttack);
+  return exported;
 }
 
 /**

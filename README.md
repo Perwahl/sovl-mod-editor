@@ -50,7 +50,7 @@ import.
 ## Development
 
 The page has no build step and no dependencies — `index.html`, `editor.js`, `modformat.js`, `zip.js`.
-Edit and reload.
+Edit and reload. Published to GitHub Pages straight from `main`.
 
 `modformat.js` is the mod format itself (validation and export) with no page code in it, so it can be
 tested on its own. The tests need only Node 22 or later, nothing installed:
@@ -61,4 +61,4 @@ npm test
 
 They run `node --test` over `test/`. `test/fixtures/spellcaster/export/` is what the editor exports for
 the fixture mod; the game loads the same files in its mod loader tests (Perwahl/FBS), so a change to the
-exported format shows up on both sides. Published to GitHub Pages straight from `main`.
+exported format shows up on both sides.

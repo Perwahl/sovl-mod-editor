@@ -1,5 +1,5 @@
 import { makeZip, readZip } from './zip.js';
-import { allSections as modSections, exportFiles, setSelectorKind, validate as validateMod } from './modformat.js';
+import { allSections as modSections, exportFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
 
 // ---------------------------------------------------------------------------------------------------
 // State
@@ -602,7 +602,33 @@ function renderSelector(selector, onRemove) {
             selector.propertyIds.push(all[0]); selector.costs.push(0);
             render();
           }, 'tiny'))
+      : null,
+    selector.kind === 'spellList' ? renderSpellList(selector) : null,
+    selector.kind === 'enchantments'
+      ? el('div', {}, el('span', { class: 'hint' }, 'What this unit can be given when building a list.'),
+          checkbox(selector.weapons, 'Magic weapons', (v) => { selector.weapons = v; render(); }),
+          checkbox(selector.items, 'Magic items', (v) => { selector.items = v; render(); }))
+      : null,
+    selector.kind === 'banners'
+      ? checkbox(selector.eliteUnit, 'Elite unit - banners up to 100 pts instead of 50', (v) => { selector.eliteUnit = v; saveDraft(); })
       : null);
+}
+
+function renderSpellList(selector) {
+  const spells = spellIds(catalog);
+  selector.propertyIds = selector.propertyIds ?? [];
+
+  return el('div', {},
+    el('span', { class: 'hint' }, 'The spells this unit can choose from. Only the game’s own spells: a mod cannot make new ones.'),
+    field('Spell count', numberInput(selector.spellCount ?? 1, (v) => { selector.spellCount = v; saveDraft(); }, { min: 1 }),
+      'Shown on the unit as Spellcaster(count).'),
+    selector.propertyIds.map((id, i) => el('div', { class: 'row' },
+      select(id, spells, (v) => { selector.propertyIds[i] = v; render(); }),
+      button('remove', () => { selector.propertyIds.splice(i, 1); render(); }, 'tiny'))),
+    button('+ spell', () => {
+      selector.propertyIds.push(spells.find((s) => !selector.propertyIds.includes(s)) ?? spells[0]);
+      render();
+    }, 'tiny'));
 }
 
 function renderModels(models, imagePaths, onRemove) {
