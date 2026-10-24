@@ -281,3 +281,41 @@ export function exportFiles(mod, catalog, images) {
   }
   return files;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Opening an existing mod
+// ---------------------------------------------------------------------------------------------------
+
+/**
+ * Reads a mod from its files, whichever way they arrived. Throws an Error whose message is shown to the
+ * person opening the mod when it cannot be opened.
+ *
+ * @param {Map<string, Uint8Array>} entries path within the mod -> bytes
+ * @returns {{ manifest: object, faction: object, images: Map<string, Uint8Array> }}
+ */
+export function readModFiles(entries, catalog) {
+  const decoder = new TextDecoder();
+  const read = (path) => (entries.has(path) ? JSON.parse(decoder.decode(entries.get(path))) : null);
+
+  const manifest = read('manifest.json');
+  if (!manifest) {
+    throw new Error('No manifest.json at the top of the mod. Pick the folder that contains it.');
+  }
+
+  const factionPath = manifest.factions?.[0];
+  if (!factionPath) throw new Error('The manifest lists no factions.');
+
+  const faction = read(factionPath);
+  if (!faction) throw new Error(`The manifest points at ${factionPath}, which is not in the mod.`);
+
+  if (manifest.schemaVersion > catalog.schemaVersion) {
+    throw new Error(`This mod is schema v${manifest.schemaVersion}; this catalog only knows v${catalog.schemaVersion}.`);
+  }
+
+  const images = new Map();
+  for (const [path, bytes] of entries) {
+    if (path.toLowerCase().endsWith('.png')) images.set(path, bytes);
+  }
+
+  return { manifest, faction, images };
+}
