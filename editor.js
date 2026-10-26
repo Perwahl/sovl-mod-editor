@@ -1,5 +1,5 @@
 import { makeZip, readZip } from './zip.js';
-import { allSections as modSections, exportFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
+import { allSections as modSections, exportFiles, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
 
 // ---------------------------------------------------------------------------------------------------
 // State
@@ -663,28 +663,10 @@ function renderModels(models, imagePaths, onRemove) {
  * @param {Map<string, Uint8Array>} entries path within the mod -> bytes
  */
 async function openMod(entries) {
-  const decoder = new TextDecoder();
-  const read = (path) => (entries.has(path) ? JSON.parse(decoder.decode(entries.get(path))) : null);
-
-  const manifest = read('manifest.json');
-  if (!manifest) {
-    throw new Error('No manifest.json at the top of the mod. Pick the folder that contains it.');
-  }
-
-  const factionPath = manifest.factions?.[0];
-  if (!factionPath) throw new Error('The manifest lists no factions.');
-
-  const faction = read(factionPath);
-  if (!faction) throw new Error(`The manifest points at ${factionPath}, which is not in the mod.`);
-
-  if (manifest.schemaVersion > catalog.schemaVersion) {
-    throw new Error(`This mod is schema v${manifest.schemaVersion}; this catalog only knows v${catalog.schemaVersion}.`);
-  }
+  const { manifest, faction, images: pngs } = readModFiles(entries, catalog);
 
   images.clear();
-  for (const [path, bytes] of entries) {
-    if (!path.toLowerCase().endsWith('.png')) continue;
-
+  for (const [path, bytes] of pngs) {
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
     const size = await new Promise((resolve) => {
       const probe = new Image();
@@ -713,17 +695,11 @@ async function openZipFile(file) {
 }
 
 async function openFolderFiles(files) {
+  // A picked folder yields paths like "ashen/manifest.json". readModFiles finds where the mod starts, which
+  // may be further down when the folder picked was the one above it.
   const entries = new Map();
-
-  // A picked folder yields paths like "ashen/manifest.json"; the mod's own paths start below that.
-  const roots = new Set(files.map((f) => f.webkitRelativePath.split('/')[0]));
-  const strip = roots.size === 1 ? [...roots][0] + '/' : '';
-
   for (const file of files) {
-    const path = file.webkitRelativePath.startsWith(strip)
-      ? file.webkitRelativePath.slice(strip.length)
-      : file.webkitRelativePath;
-    entries.set(path, new Uint8Array(await file.arrayBuffer()));
+    entries.set(file.webkitRelativePath, new Uint8Array(await file.arrayBuffer()));
   }
 
   await openMod(entries);
