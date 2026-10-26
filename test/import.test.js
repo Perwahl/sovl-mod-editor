@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { readModFiles, referencedImages, validate } from '../modformat.js';
+import { fillShownValues, readModFiles, referencedImages, validate } from '../modformat.js';
 
 const readText = (path) => readFileSync(new URL(path, import.meta.url));
 const readJson = (path) => JSON.parse(readText(path).toString('utf8'));
@@ -25,9 +25,11 @@ const cleanFaction = () => readJson('./fixtures/spellcaster/export/factions/spel
 /** The same files under a folder prefix, as a picked folder or a zipped folder lists them. */
 const under = (prefix, files) => new Map([...files].map(([path, bytes]) => [prefix + path, bytes]));
 
+/** The mod as the editor holds it once opened: the page fills in what its dropdowns show on the first render. */
 function opened(entries) {
   const { manifest, faction, images } = readModFiles(entries, catalog);
   const mod = { modId: manifest.modId, displayName: manifest.displayName, faction };
+  fillShownValues(mod, catalog);
   return { manifest, mod, images };
 }
 

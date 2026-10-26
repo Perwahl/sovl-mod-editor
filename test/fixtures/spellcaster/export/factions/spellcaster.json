@@ -76,7 +76,8 @@
           {
             "unitID": "fixture:guard"
           }
-        ]
+        ],
+        "sectionLimitCost": "One"
       }
     ]
   },
@@ -135,7 +136,8 @@
             "minCount": 10,
             "maxCount": 20
           }
-        }
+        },
+        "sectionLimitCost": "One"
       }
     ]
   },
