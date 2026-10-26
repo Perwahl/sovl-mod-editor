@@ -1,4 +1,5 @@
 import { makeZip, readZip } from './zip.js';
+import { allSections as modSections, exportFiles, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
 
 // ---------------------------------------------------------------------------------------------------
 // State
@@ -196,168 +197,20 @@ function button(label, onClick, cls = '') {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Validation - mirrors what the game enforces, so problems surface here rather than on import
-// ---------------------------------------------------------------------------------------------------
-
-function validate() {
-  const problems = [];
-  const limits = catalog.limits;
-  const prefix = mod.modId + ':';
-
-  if (!/^[a-z0-9_-]+$/.test(mod.modId)) {
-    problems.push('Mod id must be lower-case letters, digits, underscore or hyphen.');
-  }
-  if (!mod.displayName.trim()) problems.push('Mod needs a display name.');
-
-  const faction = mod.faction;
-  if (!/^[a-z0-9_.-]+$/.test(faction.slug)) problems.push('Faction slug must be lower-case letters, digits, "_", "." or "-".');
-  if (!faction.displayName.trim()) problems.push('Faction needs a display name.');
-  if (!faction.icons.length) problems.push('Faction needs at least one icon.');
-  if (!faction.factionImage) problems.push('Faction needs a faction image.');
-
-  const sections = allSections();
-  const unitIds = new Set();
-
-  for (const section of sections) {
-    for (const unit of section.units) {
-      if (!unit.unitID.startsWith(prefix)) {
-        problems.push(`Unit id "${unit.unitID}" must start with "${prefix}".`);
-      }
-      if (unitIds.has(unit.unitID)) problems.push(`Unit id "${unit.unitID}" is used more than once.`);
-      unitIds.add(unit.unitID);
-
-      if (unit.pointsCost < limits.minPointsCost || unit.pointsCost > limits.maxPointsCost) {
-        problems.push(`${unit.unitID}: points must be ${limits.minPointsCost}-${limits.maxPointsCost}.`);
-      }
-      if (!unit.icon) problems.push(`${unit.unitID}: needs an icon.`);
-      if (!unit.image) problems.push(`${unit.unitID}: needs a unit image.`);
-
-      for (const [stat, value] of Object.entries(unit.stats)) {
-        if (value < limits.minStat || value > limits.maxStat) {
-          problems.push(`${unit.unitID}: ${stat} must be ${limits.minStat}-${limits.maxStat}.`);
-        }
-      }
-
-      if (unit.kind === 'regiment' && !unit.modelCountLimits?.Warband) {
-        problems.push(`${unit.unitID}: regiments need a Warband entry in modelCountLimits.`);
-      }
-      if (unit.kind === 'character' && !unit.soloCommander && !unit.retinueOptions?.length) {
-        problems.push(`${unit.unitID}: characters need at least one retinue, or soloCommander.`);
-      }
-      for (const retinue of unit.retinueOptions ?? []) {
-        if (!unitIds.has(retinue.unitID) && !sections.some((s) => s.units.some((u) => u.unitID === retinue.unitID))) {
-          problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
-        }
-      }
-      for (const models of unit.models ?? []) {
-        if (!models.images?.length) problems.push(`${unit.unitID}: model graphics need at least one image.`);
-      }
-    }
-  }
-
-  if (!faction.characters.units.length) problems.push('The Commanders section needs at least one unit.');
-  if (!faction.battleLine.units.length) problems.push('The BattleLine section needs at least one unit.');
-
-  const propertyIds = new Set();
-  for (const property of faction.properties) {
-    if (!property.id.startsWith(prefix)) problems.push(`Property id "${property.id}" must start with "${prefix}".`);
-    if (propertyIds.has(property.id)) problems.push(`Property id "${property.id}" is used more than once.`);
-    if (catalog.properties.some((p) => p.id === property.id)) {
-      problems.push(`Property id "${property.id}" already exists in the game.`);
-    }
-    propertyIds.add(property.id);
-
-    if (!property.effects.length) problems.push(`${property.id}: needs at least one effect.`);
-    if (property.effects.length > limits.maxEffectsPerProperty) {
-      problems.push(`${property.id}: at most ${limits.maxEffectsPerProperty} effects.`);
-    }
-    for (const effect of property.effects) {
-      if (effect.kind === 'statModifier' && Math.abs(effect.value ?? 0) > limits.maxStatModifier) {
-        problems.push(`${property.id}: stat modifier must be within ±${limits.maxStatModifier}.`);
-      }
-    }
-  }
-
-  for (const path of referencedImages()) {
-    if (!images.has(path)) problems.push(`Missing image: ${path}`);
-  }
-  if (!images.has('preview.png')) {
-    problems.push('Add preview.png (shown on the Workshop). Publishing needs it.');
-  }
-
-  return problems;
-}
-
-function allSections() {
-  return [mod.faction.characters, mod.faction.battleLine, ...mod.faction.sections];
-}
-
-function referencedImages() {
-  const paths = new Set();
-  const add = (p) => p && paths.add(p);
-
-  add(mod.faction.factionImage);
-  mod.faction.icons.forEach(add);
-
-  for (const section of allSections()) {
-    for (const unit of section.units) {
-      add(unit.icon);
-      add(unit.image);
-      for (const models of unit.models ?? []) {
-        (models.images ?? []).forEach(add);
-        (models.steedImages ?? []).forEach(add);
-      }
-    }
-  }
-  return paths;
-}
-
-// ---------------------------------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------------------------------
 
-function buildFactionJson() {
-  const faction = mod.faction;
-  return {
-    slug: faction.slug,
-    displayName: faction.displayName,
-    materialTemplate: faction.materialTemplate,
-    factionImage: faction.factionImage,
-    icons: faction.icons,
-    defaultColors: faction.defaultColors,
-    properties: faction.properties,
-    characters: faction.characters,
-    battleLine: faction.battleLine,
-    sections: faction.sections,
-  };
+// The page-side wrappers over modformat.js, which holds the format itself.
+function validate() {
+  return validateMod(mod, catalog, images);
+}
+
+function allSections() {
+  return modSections(mod);
 }
 
 async function exportZip() {
-  const encoder = new TextEncoder();
-  const files = [
-    {
-      name: 'manifest.json',
-      data: encoder.encode(JSON.stringify({
-        schemaVersion: catalog.schemaVersion,
-        modId: mod.modId,
-        displayName: mod.displayName,
-        author: mod.author,
-        contentVersion: mod.contentVersion,
-        minGameVersion: catalog.gameVersion,
-        factions: [`factions/${mod.faction.slug}.json`],
-      }, null, 2)),
-    },
-    {
-      name: `factions/${mod.faction.slug}.json`,
-      data: encoder.encode(JSON.stringify(buildFactionJson(), null, 2)),
-    },
-  ];
-
-  for (const [path, image] of images) {
-    files.push({ name: path, data: image.bytes });
-  }
-
-  const blob = makeZip(files);
+  const blob = makeZip(exportFiles(mod, catalog, images));
   const link = el('a', { href: URL.createObjectURL(blob), download: `${mod.modId}.zip` });
   document.body.append(link);
   link.click();
@@ -728,7 +581,7 @@ function renderSelector(selector, onRemove) {
 
   return el('div', { class: 'card thin' },
     el('div', { class: 'row' },
-      select(selector.kind, catalog.propertySelectorKinds, (v) => { selector.kind = v; render(); }),
+      select(selector.kind, catalog.propertySelectorKinds, (v) => { setSelectorKind(selector, v, catalog); render(); }),
       button('remove', onRemove, 'tiny danger')),
     ['builtin', 'optional'].includes(selector.kind)
       ? field('Property', select(selector.propertyId, all, (v) => { selector.propertyId = v; render(); }, { allowEmpty: true }),
@@ -749,7 +602,33 @@ function renderSelector(selector, onRemove) {
             selector.propertyIds.push(all[0]); selector.costs.push(0);
             render();
           }, 'tiny'))
+      : null,
+    selector.kind === 'spellList' ? renderSpellList(selector) : null,
+    selector.kind === 'enchantments'
+      ? el('div', {}, el('span', { class: 'hint' }, 'What this unit can be given when building a list.'),
+          checkbox(selector.weapons, 'Magic weapons', (v) => { selector.weapons = v; render(); }),
+          checkbox(selector.items, 'Magic items', (v) => { selector.items = v; render(); }))
+      : null,
+    selector.kind === 'banners'
+      ? checkbox(selector.eliteUnit, 'Elite unit - banners up to 100 pts instead of 50', (v) => { selector.eliteUnit = v; saveDraft(); })
       : null);
+}
+
+function renderSpellList(selector) {
+  const spells = spellIds(catalog);
+  selector.propertyIds = selector.propertyIds ?? [];
+
+  return el('div', {},
+    el('span', { class: 'hint' }, 'The spells this unit can choose from. Only the game’s own spells: a mod cannot make new ones.'),
+    field('Spell count', numberInput(selector.spellCount ?? 1, (v) => { selector.spellCount = v; saveDraft(); }, { min: 1 }),
+      'Shown on the unit as Spellcaster(count).'),
+    selector.propertyIds.map((id, i) => el('div', { class: 'row' },
+      select(id, spells, (v) => { selector.propertyIds[i] = v; render(); }),
+      button('remove', () => { selector.propertyIds.splice(i, 1); render(); }, 'tiny'))),
+    button('+ spell', () => {
+      selector.propertyIds.push(spells.find((s) => !selector.propertyIds.includes(s)) ?? spells[0]);
+      render();
+    }, 'tiny'));
 }
 
 function renderModels(models, imagePaths, onRemove) {
@@ -784,28 +663,10 @@ function renderModels(models, imagePaths, onRemove) {
  * @param {Map<string, Uint8Array>} entries path within the mod -> bytes
  */
 async function openMod(entries) {
-  const decoder = new TextDecoder();
-  const read = (path) => (entries.has(path) ? JSON.parse(decoder.decode(entries.get(path))) : null);
-
-  const manifest = read('manifest.json');
-  if (!manifest) {
-    throw new Error('No manifest.json at the top of the mod. Pick the folder that contains it.');
-  }
-
-  const factionPath = manifest.factions?.[0];
-  if (!factionPath) throw new Error('The manifest lists no factions.');
-
-  const faction = read(factionPath);
-  if (!faction) throw new Error(`The manifest points at ${factionPath}, which is not in the mod.`);
-
-  if (manifest.schemaVersion > catalog.schemaVersion) {
-    throw new Error(`This mod is schema v${manifest.schemaVersion}; this catalog only knows v${catalog.schemaVersion}.`);
-  }
+  const { manifest, faction, images: pngs } = readModFiles(entries, catalog);
 
   images.clear();
-  for (const [path, bytes] of entries) {
-    if (!path.toLowerCase().endsWith('.png')) continue;
-
+  for (const [path, bytes] of pngs) {
     const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
     const size = await new Promise((resolve) => {
       const probe = new Image();
@@ -834,17 +695,11 @@ async function openZipFile(file) {
 }
 
 async function openFolderFiles(files) {
+  // A picked folder yields paths like "ashen/manifest.json". readModFiles finds where the mod starts, which
+  // may be further down when the folder picked was the one above it.
   const entries = new Map();
-
-  // A picked folder yields paths like "ashen/manifest.json"; the mod's own paths start below that.
-  const roots = new Set(files.map((f) => f.webkitRelativePath.split('/')[0]));
-  const strip = roots.size === 1 ? [...roots][0] + '/' : '';
-
   for (const file of files) {
-    const path = file.webkitRelativePath.startsWith(strip)
-      ? file.webkitRelativePath.slice(strip.length)
-      : file.webkitRelativePath;
-    entries.set(path, new Uint8Array(await file.arrayBuffer()));
+    entries.set(file.webkitRelativePath, new Uint8Array(await file.arrayBuffer()));
   }
 
   await openMod(entries);

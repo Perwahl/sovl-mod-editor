@@ -1,0 +1,9 @@
+{
+  "name": "sovl-mod-editor",
+  "private": true,
+  "description": "Only here for the tests: the editor itself has no build step and no dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

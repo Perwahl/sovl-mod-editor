@@ -1,0 +1,10 @@
+{
+  // The faction path in the Windows form the game accepts.
+  "schemaVersion": 1,
+  "modId": "fixture",
+  "displayName": "Spellcaster Fixture",
+  "author": "sovl-mod-editor tests",
+  "contentVersion": "1.0.0",
+  "minGameVersion": "1.32",
+  "factions": [".\\factions\\spellcaster.json"],
+}

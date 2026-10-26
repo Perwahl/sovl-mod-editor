@@ -1,0 +1,144 @@
+﻿{
+  // Written by hand, as Workshop mods often are. The game reads it with Newtonsoft, which allows all of this.
+  slug: "spellcaster",
+  "DisplayName": 'Spellcaster Fixture',
+  "materialTemplate": "Default",
+  "factionImage": "./images/unit.png",
+  "icons": [
+    "images\\icon.png",
+  ],
+  "defaultColors": {
+    "primary": 4,
+    "secondary": 30,
+    "icon": 40
+  },
+  "properties": [],
+  "characters": {
+    "sectionName": "Commanders",
+    "unitLimits": {
+      "Warband": {
+        "minCount": 1,
+        "maxCount": 1
+      },
+      "Battalion": {
+        "minCount": 1,
+        "maxCount": 1
+      },
+      "Legion": {
+        "minCount": 1,
+        "maxCount": 1
+      },
+      "Unrestricted": {
+        "minCount": 1,
+        "maxCount": 1
+      },
+      "BorderPatrol": {
+        "minCount": 1,
+        "maxCount": 1
+      }
+    },
+    "units": [
+      {
+        "kind": "character",
+        "UnitID": "fixture:mage",
+        "displayName": "Fixture Mage",
+        "pointsCost": 80,
+        "modelType": "Infantry",
+        "unitType": "CommanderFighter",
+        "pattern": "Solid",
+        "stats": {
+          "Skill": 3,
+          "Power": 3,
+          "Defense": 3,
+          "Attacks": 1,
+          "Wounds": 3,
+          "Discipline": 8
+        },
+        "icon": "images/icon.png",
+        "image": "Images/Unit.png",
+        "properties": [
+          {
+            "kind": "spellList",
+            "propertyIds": [
+              "fireball",
+              "shadowBolt",
+              "fieryBlades"
+            ],
+            "spellCount": 2, /* two of the three */
+          },
+          {
+            "kind": "enchantments",
+            "weapons": true,
+            "items": true
+          }
+        ],
+        "models": [],
+        "retinueOptions": [
+          {
+            "unitID": "fixture:guard"
+          }
+        ]
+      }
+    ]
+  },
+  "battleLine": {
+    "sectionName": "BattleLine",
+    "unitLimits": {
+      "Warband": {
+        "minCount": 2,
+        "maxCount": 4
+      },
+      "Battalion": {
+        "minCount": 2,
+        "maxCount": 4
+      },
+      "Legion": {
+        "minCount": 2,
+        "maxCount": 4
+      },
+      "Unrestricted": {
+        "minCount": 2,
+        "maxCount": 4
+      },
+      "BorderPatrol": {
+        "minCount": 2,
+        "maxCount": 4
+      }
+    },
+    "units": [
+      {
+        "kind": "regiment",
+        "unitID": "fixture:guard",
+        "displayName": "Fixture Guard",
+        "pointsCost": 10,
+        "modelType": "Infantry",
+        "unitType": "MeleeInfantry",
+        "pattern": "Solid",
+        "stats": {
+          "Skill": 3,
+          "Power": 3,
+          "Defense": 3,
+          "Attacks": 1,
+          "Wounds": 1,
+          "Discipline": 7
+        },
+        "icon": "images/icon.png",
+        "image": "images/unit.png",
+        "properties": [
+          {
+            "kind": "banners",
+            "eliteUnit": true
+          }
+        ],
+        "models": [],
+        "modelCountLimits": {
+          "Warband": {
+            "minCount": 10,
+            "maxCount": 20
+          }
+        }
+      }
+    ]
+  },
+  "sections": [],
+}
