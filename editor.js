@@ -1,5 +1,5 @@
 import { makeZip, readZip } from './zip.js';
-import { allSections as modSections, exportFiles, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
+import { allSections as modSections, exportFiles, fillShownValues, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
 
 // ---------------------------------------------------------------------------------------------------
 // State
@@ -265,6 +265,8 @@ function restoreFocus(state) {
 
 function render() {
   const focus = captureFocus();
+  // Before anything is drawn, so each dropdown's shown option is also the stored one (see fillShownValues).
+  fillShownValues(mod, catalog);
   saveDraft();
   document.getElementById('outline').replaceChildren(renderOutline());
   if (!keepDetail) document.getElementById('detail').replaceChildren(renderDetail());

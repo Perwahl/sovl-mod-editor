@@ -10,7 +10,14 @@
     "factionImage": "images/unit.png",
     "icons": ["images/icon.png"],
     "defaultColors": { "primary": 4, "secondary": 30, "icon": 40 },
-    "properties": [],
+    "properties": [
+      {
+        "id": "fixture:ambush",
+        "displayName": "Ambush",
+        "description": "Deploys as an ambusher. Its Type dropdowns were left at their first option.",
+        "effects": [{ "kind": "deployment" }, { "kind": "toHit" }]
+      }
+    ],
     "characters": {
       "sectionName": "Commanders",
       "unitLimits": {
@@ -63,7 +70,8 @@
           "icon": "images/icon.png",
           "image": "images/unit.png",
           "properties": [
-            { "kind": "banners", "propertyId": "", "eliteUnit": true }
+            { "kind": "banners", "propertyId": "", "eliteUnit": true },
+            { "kind": "builtin", "propertyId": "fixture:ambush" }
           ],
           "models": [],
           "modelCountLimits": { "Warband": { "minCount": 10, "maxCount": 20 } }

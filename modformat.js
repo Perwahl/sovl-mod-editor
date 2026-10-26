@@ -83,6 +83,50 @@ export function exportSelector(selector) {
   }
 }
 
+/**
+ * Writes down what every dropdown shows. A dropdown whose field is unset, or set to something that is not one of
+ * its options, shows its first option, and picking that same option fires no change, so the field used to stay
+ * empty and the export left it out (SOVL-FB-220, SOVL-FB-224). The fallbacks are the values the game also uses
+ * for a missing field. A value that only differs in case becomes the option it matches.
+ */
+export function fillShownValues(mod, catalog) {
+  const faction = mod.faction;
+  faction.materialTemplate = shown(faction.materialTemplate, catalog.materialTemplates, 'Default');
+
+  const effectKinds = catalog.effects.map((e) => e.kind);
+  for (const property of faction.properties ?? []) {
+    property.appliesTo = shown(property.appliesTo, catalog.propertyAppliesTo);
+    for (const effect of property.effects ?? []) {
+      effect.kind = shown(effect.kind, effectKinds);
+      const info = catalog.effects.find((e) => e.kind === effect.kind);
+      const fields = info?.fields ?? [];
+      if (fields.includes('stat')) effect.stat = shown(effect.stat, catalog.stats);
+      if (fields.includes('effectType')) effect.effectType = shown(effect.effectType, info.effectTypeValues);
+      if (fields.includes('appliesTo')) effect.appliesTo = shown(effect.appliesTo, catalog.appliesTo);
+    }
+  }
+
+  for (const section of allSections(mod)) {
+    for (const unit of section.units) {
+      unit.kind = shown(unit.kind, catalog.unitKinds);
+      unit.modelType = shown(unit.modelType, catalog.modelTypes.map((m) => m.name));
+      unit.unitType = shown(unit.unitType, catalog.unitTypes);
+      unit.pattern = shown(unit.pattern, catalog.patterns);
+      unit.sectionLimitCost = shown(unit.sectionLimitCost, catalog.sectionLimitCosts);
+      for (const selector of unit.properties ?? []) {
+        selector.kind = shown(selector.kind, catalog.propertySelectorKinds);
+      }
+    }
+  }
+}
+
+/** The option a dropdown shows for this value: the value itself, the option it matches ignoring case, or the fallback. */
+function shown(value, options, fallback = options[0]) {
+  if (options.includes(value)) return value;
+  const lower = typeof value === 'string' ? value.toLowerCase() : null;
+  return options.find((option) => option.toLowerCase() === lower) ?? (options.includes(fallback) ? fallback : options[0]);
+}
+
 /** The problems with one unit property entry, the same ones BuildSelector would refuse the mod for. */
 function selectorProblems(selector, owner, knownIds, spells) {
   const problems = [];
@@ -270,6 +314,10 @@ function exportUnit(unit) {
  * @returns {{ name: string, data: Uint8Array }[]}
  */
 export function exportFiles(mod, catalog, images) {
+  // The page fills these on every render already; doing it here too means the export never depends on that.
+  mod = structuredClone(mod);
+  fillShownValues(mod, catalog);
+
   const encoder = new TextEncoder();
   const files = [
     { name: 'manifest.json', data: encoder.encode(JSON.stringify(buildManifestJson(mod, catalog), null, 2)) },
