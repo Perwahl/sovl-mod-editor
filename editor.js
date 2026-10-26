@@ -1,5 +1,5 @@
 import { makeZip, readZip } from './zip.js';
-import { allSections as modSections, exportFiles, fillShownValues, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
+import { allSections as modSections, exportFiles, fillShownValues, loadedSections, readModFiles, setSelectorKind, spellIds, validate as validateMod } from './modformat.js';
 
 // ---------------------------------------------------------------------------------------------------
 // State
@@ -34,6 +34,8 @@ function blankMod() {
       battleLine: newSection('BattleLine', 2, 4),
       sections: [],
     },
+    // Factions after the first, kept as their files' text: the editor edits one faction (see readModFiles).
+    otherFactions: [],
   };
 }
 
@@ -351,6 +353,7 @@ function renderMod() {
     field('Version', textInput(mod.contentVersion, (v) => { mod.contentVersion = v; saveDraft(); })),
 
     el('h2', {}, 'Faction'),
+    keptAsLoaded(),
     field('Slug', idInput(faction.slug, (v) => { faction.slug = v; render(); })),
     field('Display name', textInput(faction.displayName, (v) => { faction.displayName = v; render(); })),
     field('Material template', select(faction.materialTemplate, catalog.materialTemplates, (v) => { faction.materialTemplate = v; saveDraft(); })),
@@ -368,6 +371,20 @@ function renderMod() {
     field('Primary', numberInput(faction.defaultColors.primary, (v) => { faction.defaultColors.primary = v; saveDraft(); }, { min: 0, max: catalog.limits.colorPaletteSize - 1 })),
     field('Secondary', numberInput(faction.defaultColors.secondary, (v) => { faction.defaultColors.secondary = v; saveDraft(); }, { min: 0, max: catalog.limits.colorPaletteSize - 1 })),
     field('Icon', numberInput(faction.defaultColors.icon, (v) => { faction.defaultColors.icon = v; saveDraft(); }, { min: 0, max: catalog.limits.colorPaletteSize - 1 })));
+}
+
+/** What the opened mod has that the editor cannot edit, and exports as it was loaded. */
+function keptAsLoaded() {
+  const mounts = mod.faction.mounts?.units ?? [];
+  const others = mod.otherFactions ?? [];
+  if (!mounts.length && !others.length) return null;
+
+  return el('div', { class: 'card thin' },
+    el('strong', {}, 'Kept as loaded'),
+    el('p', { class: 'hint' }, 'This mod has parts the editor cannot edit yet. They are exported exactly as they were opened.'),
+    el('ul', {},
+      mounts.length ? el('li', {}, `Mounts section: ${mounts.map((u) => u.unitID).join(', ')}. Commanders can ride these.`) : null,
+      others.map((other) => el('li', {}, `Faction ${other.path}`))));
 }
 
 function renderImages() {
@@ -493,7 +510,7 @@ function renderUnit(unit, sel) {
 
   const imagePaths = [...images.keys()];
   const section = allSections()[sel.sectionIndex];
-  const otherUnits = allSections().flatMap((s) => s.units).filter((u) => u !== unit);
+  const otherUnits = loadedSections(mod).flatMap((s) => s.units ?? []).filter((u) => u !== unit);
 
   const parts = [
     el('h2', {}, 'Unit',
@@ -665,7 +682,7 @@ function renderModels(models, imagePaths, onRemove) {
  * @param {Map<string, Uint8Array>} entries path within the mod -> bytes
  */
 async function openMod(entries) {
-  const { manifest, faction, images: pngs } = readModFiles(entries, catalog);
+  const { manifest, faction, otherFactions, images: pngs, warnings } = readModFiles(entries, catalog);
 
   images.clear();
   for (const [path, bytes] of pngs) {
@@ -686,10 +703,14 @@ async function openMod(entries) {
     contentVersion: manifest.contentVersion ?? '1.0.0',
     // Merged over a blank faction so a mod saved without a newer field still opens.
     faction: { ...blankMod().faction, ...faction },
+    otherFactions,
   };
 
   selection = { kind: 'mod' };
   render();
+
+  // Nothing is dropped, but whoever opened it should know not all of it is editable here.
+  if (warnings.length) alert(warnings.join('\n\n'));
 }
 
 async function openZipFile(file) {
@@ -752,6 +773,7 @@ function start(loaded) {
   mod = loadDraft() ?? blankMod();
   // A draft saved before a field existed should not crash the editor.
   mod.faction = { ...blankMod().faction, ...mod.faction };
+  mod.otherFactions = mod.otherFactions ?? [];
 
   document.getElementById('loader').hidden = true;
   document.getElementById('app').hidden = false;

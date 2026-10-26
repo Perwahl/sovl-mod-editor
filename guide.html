@@ -237,7 +237,12 @@ mod is used in a battle. Restart the game to get them back.</p>
   <li><strong>The game cannot import a <code>.zip</code>.</strong> Unzip into the mods folder by hand. A
       button for this is coming.</li>
   <li><strong>One faction per mod in the editor.</strong> The format allows up to four; the editor edits
-      one.</li>
+      the first. Open a mod with more and the others are kept as they are: listed under <em>Kept as
+      loaded</em>, and exported unchanged.</li>
+  <li><strong>No mounts section.</strong> A hand-written faction can list the units its commanders ride in a
+      <code>mounts</code> section. The editor cannot edit one yet, but keeps it, exports it with the faction
+      and lets a commander pick its units as a retinue. In the editor, a mount is any unit with
+      <em>Is a mount</em> ticked.</li>
   <li>Commander-on-mount art has one layout — a rider sprite on a steed sprite, nudged by <em>rider
       offset</em>. Finer control over how riders sit, and how models layer within a rank, is not
       exposed.</li>

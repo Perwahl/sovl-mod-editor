@@ -3,8 +3,17 @@
 // editor.js holds the page; everything here takes the mod and the catalog as arguments.
 // ---------------------------------------------------------------------------------------------------
 
+/** The sections the editor edits. */
 export function allSections(mod) {
   return [mod.faction.characters, mod.faction.battleLine, ...mod.faction.sections];
+}
+
+/**
+ * Every section the game loads units from: the editable ones and the faction's mounts section, which the editor
+ * keeps as it was opened (a hand-written mod may have one; the editor has no panel for it).
+ */
+export function loadedSections(mod) {
+  return mod.faction.mounts ? [...allSections(mod), mod.faction.mounts] : allSections(mod);
 }
 
 export function referencedImages(mod) {
@@ -14,8 +23,8 @@ export function referencedImages(mod) {
   add(mod.faction.factionImage);
   mod.faction.icons.forEach(add);
 
-  for (const section of allSections(mod)) {
-    for (const unit of section.units) {
+  for (const section of loadedSections(mod)) {
+    for (const unit of section.units ?? []) {
       add(unit.icon);
       add(unit.image);
       for (const models of unit.models ?? []) {
@@ -181,13 +190,13 @@ export function validate(mod, catalog, imagePaths) {
   if (!faction.icons.length) problems.push('Faction needs at least one icon.');
   if (!faction.factionImage) problems.push('Faction needs a faction image.');
 
-  const sections = allSections(mod);
+  const sections = loadedSections(mod);
   const unitIds = new Set();
   const knownPropertyIds = new Set([...catalog.properties.map((p) => p.id), ...faction.properties.map((p) => p.id)]);
   const spells = new Set(spellIds(catalog));
 
   for (const section of sections) {
-    for (const unit of section.units) {
+    for (const unit of section.units ?? []) {
       if (!unit.unitID.startsWith(prefix)) {
         problems.push(`Unit id "${unit.unitID}" must start with "${prefix}".`);
       }
@@ -213,7 +222,7 @@ export function validate(mod, catalog, imagePaths) {
         problems.push(`${unit.unitID}: characters need at least one retinue, or soloCommander.`);
       }
       for (const retinue of unit.retinueOptions ?? []) {
-        if (!unitIds.has(retinue.unitID) && !sections.some((s) => s.units.some((u) => u.unitID === retinue.unitID))) {
+        if (!unitIds.has(retinue.unitID) && !sections.some((s) => s.units?.some((u) => u.unitID === retinue.unitID))) {
           problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
         }
       }
@@ -249,6 +258,14 @@ export function validate(mod, catalog, imagePaths) {
     }
   }
 
+  const others = mod.otherFactions ?? [];
+  if (others.some((other) => other.path.toLowerCase() === factionPath(mod).toLowerCase())) {
+    problems.push(`Faction slug "${faction.slug}" would save over ${factionPath(mod)}, another faction in this mod. Pick another slug.`);
+  }
+  if (1 + others.length > limits.maxFactionsPerMod) {
+    problems.push(`A mod can have at most ${limits.maxFactionsPerMod} factions; this one has ${1 + others.length}.`);
+  }
+
   for (const path of referencedImages(mod)) {
     if (!imagePaths.has(path)) problems.push(`Missing image: ${path}`);
   }
@@ -271,7 +288,7 @@ export function buildManifestJson(mod, catalog) {
     author: mod.author,
     contentVersion: mod.contentVersion,
     minGameVersion: catalog.gameVersion,
-    factions: [factionPath(mod)],
+    factions: [factionPath(mod), ...(mod.otherFactions ?? []).map((other) => other.path)],
   };
 }
 
@@ -292,11 +309,12 @@ export function buildFactionJson(mod) {
     characters: exportSection(faction.characters),
     battleLine: exportSection(faction.battleLine),
     sections: faction.sections.map(exportSection),
+    ...(faction.mounts ? { mounts: exportSection(faction.mounts) } : {}),
   };
 }
 
 function exportSection(section) {
-  return { ...section, units: section.units.map(exportUnit) };
+  return section.units ? { ...section, units: section.units.map(exportUnit) } : section;
 }
 
 function exportUnit(unit) {
@@ -322,6 +340,8 @@ export function exportFiles(mod, catalog, images) {
   const files = [
     { name: 'manifest.json', data: encoder.encode(JSON.stringify(buildManifestJson(mod, catalog), null, 2)) },
     { name: factionPath(mod), data: encoder.encode(JSON.stringify(buildFactionJson(mod), null, 2)) },
+    // Factions after the first are written back exactly as they were opened.
+    ...(mod.otherFactions ?? []).map((other) => ({ name: other.path, data: encoder.encode(other.text) })),
   ];
 
   for (const [path, image] of images) {
@@ -345,30 +365,55 @@ const MANIFEST = 'manifest.json';
  * front of every path. Throws an Error whose message is shown to the person opening the mod.
  *
  * @param {Map<string, Uint8Array>} entries path -> bytes
- * @returns {{ manifest: object, faction: object, images: Map<string, Uint8Array> }} images keyed by their path
- *   within the mod, which is also how the faction refers to them
+ * @returns {{ manifest: object, faction: object, otherFactions: { path: string, text: string }[],
+ *   images: Map<string, Uint8Array>, warnings: string[] }} faction is the first faction, the one the editor edits;
+ *   otherFactions are the rest, as their files' text, to be written back unchanged. images are keyed by their path
+ *   within the mod, which is also how the faction refers to them. warnings say what the editor cannot edit.
  */
 export function readModFiles(entries, catalog) {
   const files = modRootFiles(entries);
   const stored = new Map([...files.keys()].map((path) => [path.toLowerCase(), path]));
-  const decoder = new TextDecoder();
+  // ignoreBOM keeps a byte order mark in the text, so a faction kept as loaded is written back byte for byte.
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
 
   const find = (declared, owner) => stored.get(modPath(declared, owner).toLowerCase()) ?? null;
   const readJson = (path) => canonicalFields(parseModJson(decoder.decode(files.get(path)), path));
 
   const manifest = readJson(MANIFEST);
 
-  const declared = manifest.factions?.[0];
-  if (!declared) throw new Error('The manifest lists no factions.');
+  const declared = Array.isArray(manifest.factions) ? manifest.factions : [];
+  if (!declared.length) throw new Error('The manifest lists no factions.');
 
-  const factionPath = find(declared, MANIFEST);
-  if (!factionPath) throw new Error(`The manifest points at ${declared}, which is not in the mod.`);
+  const factionPaths = declared.map((path) => {
+    const found = find(path, MANIFEST);
+    if (!found) throw new Error(`The manifest points at ${path}, which is not in the mod.`);
+    return found;
+  });
 
   if (manifest.schemaVersion > catalog.schemaVersion) {
     throw new Error(`This mod is schema v${manifest.schemaVersion}; this catalog only knows v${catalog.schemaVersion}.`);
   }
 
+  const [factionPath, ...otherPaths] = factionPaths;
   const faction = readJson(factionPath);
+
+  // The editor edits one faction. The others are kept as text and written back unchanged; reading them here only
+  // makes a broken one fail to open now rather than fail to load in the game.
+  const otherFactions = otherPaths.map((path) => {
+    readJson(path);
+    return { path, text: decoder.decode(files.get(path)) };
+  });
+
+  const warnings = [];
+  if (otherFactions.length) {
+    warnings.push(`This mod has ${factionPaths.length} factions. Only the first, ${factionPath}, can be edited here. `
+      + `${otherPaths.join(', ')} ${otherPaths.length === 1 ? 'is' : 'are'} kept as loaded and exported unchanged.`);
+  }
+  if (faction.mounts?.units?.length) {
+    const count = faction.mounts.units.length;
+    warnings.push(`${factionPath} has a mounts section (${count} unit${count === 1 ? '' : 's'}). The editor cannot edit `
+      + 'it yet; it is kept as loaded and exported with the faction. Commanders can still ride its units.');
+  }
 
   // Point image references at the files as stored. One that does not resolve is left as written, and shows up
   // as a missing image rather than stopping the mod from opening.
@@ -382,7 +427,7 @@ export function readModFiles(entries, catalog) {
 
   const images = new Map([...files].filter(([path]) => path.toLowerCase().endsWith('.png')));
 
-  return { manifest, faction, images };
+  return { manifest, faction, otherFactions, images, warnings };
 }
 
 /** The files under the folder that holds manifest.json, keyed by their path from there. */

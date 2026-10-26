@@ -45,6 +45,7 @@
         "modelType": "Infantry",
         "unitType": "CommanderFighter",
         "pattern": "Solid",
+        "sectionLimitCost": "One",
         "stats": {
           "Skill": 3,
           "Power": 3,
@@ -117,6 +118,7 @@
         "modelType": "Infantry",
         "unitType": "MeleeInfantry",
         "pattern": "Solid",
+        "sectionLimitCost": "One",
         "stats": {
           "Skill": 3,
           "Power": 3,
