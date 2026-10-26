@@ -1,0 +1,49 @@
+{
+  // A second faction, written by hand. The editor edits only the first faction of a mod and keeps this one
+  // byte for byte.
+  "slug": "second",
+  "displayName": "Second Fixture",
+  "materialTemplate": "Default",
+  "factionImage": "images/unit.png",
+  "icons": ["images/icon.png"],
+  "defaultColors": { "primary": 10, "secondary": 20, "icon": 30 },
+  "properties": [],
+  "characters": {
+    "sectionName": "Commanders",
+    "unitLimits": { "Warband": { "minCount": 1, "maxCount": 1 } },
+    "units": [
+      {
+        "kind": "character",
+        "unitID": "fixture:captain",
+        "displayName": "Fixture Captain",
+        "pointsCost": 50,
+        "modelType": "Infantry",
+        "unitType": "CommanderFighter",
+        "pattern": "Solid",
+        "stats": { "Skill": 4, "Power": 3, "Defense": 3, "Attacks": 2, "Wounds": 3, "Discipline": 8 },
+        "icon": "images/icon.png",
+        "image": "images/unit.png",
+        "soloCommander": true,
+      },
+    ],
+  },
+  "battleLine": {
+    "sectionName": "BattleLine",
+    "unitLimits": { "Warband": { "minCount": 1, "maxCount": 4 } },
+    "units": [
+      {
+        "kind": "regiment",
+        "unitID": "fixture:spearman",
+        "displayName": "Fixture Spearman",
+        "pointsCost": 8,
+        "modelType": "Infantry",
+        "unitType": "MeleeInfantry",
+        "pattern": "Solid",
+        "stats": { "Skill": 3, "Power": 3, "Defense": 3, "Attacks": 1, "Wounds": 1, "Discipline": 6 },
+        "icon": "images/icon.png",
+        "image": "images/unit.png",
+        "modelCountLimits": { "Warband": { "minCount": 10, "maxCount": 20 } },
+      },
+    ],
+  },
+}
