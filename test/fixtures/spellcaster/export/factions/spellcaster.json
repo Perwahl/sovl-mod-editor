@@ -11,7 +11,25 @@
     "secondary": 30,
     "icon": 40
   },
-  "properties": [],
+  "properties": [
+    {
+      "id": "fixture:ambush",
+      "displayName": "Ambush",
+      "description": "Deploys as an ambusher. Its Type dropdowns were left at their first option.",
+      "effects": [
+        {
+          "kind": "deployment",
+          "effectType": "ambusher"
+        },
+        {
+          "kind": "toHit",
+          "effectType": "rerollMisses",
+          "appliesTo": "ownerUnit"
+        }
+      ],
+      "appliesTo": "Models"
+    }
+  ],
   "characters": {
     "sectionName": "Commanders",
     "unitLimits": {
@@ -128,6 +146,10 @@
           {
             "kind": "banners",
             "eliteUnit": true
+          },
+          {
+            "kind": "builtin",
+            "propertyId": "fixture:ambush"
           }
         ],
         "models": [],
