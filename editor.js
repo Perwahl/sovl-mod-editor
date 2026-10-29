@@ -127,7 +127,8 @@ function el(tag, props = {}, ...children) {
     else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
     else if (value !== null && value !== undefined && value !== false) node.setAttribute(key, value);
   }
-  for (const child of children.flat()) {
+  // Any depth: a property's effects are a list inside the list of parts that make up its panel.
+  for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
     node.append(child.nodeType ? child : document.createTextNode(String(child)));
   }
