@@ -5,7 +5,7 @@ import { exportFiles, readModFiles } from '../modformat.js';
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 
-const catalog = readJson('../catalog.v1.json');
+const catalog = readJson('../catalog.v2.json');
 const draft = () => readJson('./fixtures/spellcaster/draft.json');
 const effectInfo = (kind) => catalog.effects.find((e) => e.kind === kind);
 

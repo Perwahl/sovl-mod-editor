@@ -21,6 +21,7 @@ export function referencedImages(mod) {
   const add = (p) => p && paths.add(p);
 
   add(mod.faction.factionImage);
+  mod.faction.properties.forEach((p) => add(p.icon));
   mod.faction.icons.forEach(add);
 
   for (const section of loadedSections(mod)) {
@@ -166,6 +167,39 @@ function selectorProblems(selector, owner, knownIds, spells) {
   return problems;
 }
 
+/** The problems with a property's activated ability: the rules ModFactionBuilder.BuildAbility applies. */
+function abilityProblems(property, limits) {
+  const problems = [];
+  const a = property.ability;
+  const name = property.id;
+
+  if (a.charges !== -1 && (a.charges < 1 || a.charges > limits.maxAbilityCharges)) {
+    problems.push(`${name}: uses per battle must be 1-${limits.maxAbilityCharges}, or unlimited.`);
+  }
+  if (a.target !== 'self' && (a.range < 1 || a.range > limits.maxAbilityRange)) {
+    problems.push(`${name}: range must be 1-${limits.maxAbilityRange}.`);
+  }
+
+  if (a.attack) {
+    if (a.target !== 'enemy') problems.push(`${name}: an attack must target an enemy.`);
+    if (a.attack.power < 1 || a.attack.power > limits.maxAttackPower) problems.push(`${name}: attack power must be 1-${limits.maxAttackPower}.`);
+    if (a.attack.count < 1 || a.attack.count > limits.maxAttackCount) problems.push(`${name}: attack count must be 1-${limits.maxAttackCount}.`);
+    return problems;
+  }
+
+  const heal = a.heal;
+  if (heal && !heal.fullHeal && (heal.d3 < 0 || heal.d3 > limits.maxHealDice || heal.plus < 0 || heal.plus > limits.maxHealBonus || heal.d3 + heal.plus === 0)) {
+    problems.push(`${name}: a heal needs 0-${limits.maxHealDice} D3 plus 0-${limits.maxHealBonus} wounds, more than nothing in all.`);
+  }
+  if (!property.effects.length && !heal && !a.rally) {
+    problems.push(`${name}: the ability does nothing. Give it effects, a heal, a rally or an attack.`);
+  }
+  if (property.effects.length && (a.duration === 0 || a.duration < -1 || a.duration > limits.maxAbilityDuration)) {
+    problems.push(`${name}: effects need to last 1-${limits.maxAbilityDuration} turns, or -1 for the rest of the battle.`);
+  }
+  return problems;
+}
+
 // ---------------------------------------------------------------------------------------------------
 // Validation - mirrors what the game enforces, so problems surface here rather than on import
 // ---------------------------------------------------------------------------------------------------
@@ -222,9 +256,9 @@ export function validate(mod, catalog, imagePaths) {
         problems.push(`${unit.unitID}: characters need at least one retinue, or soloCommander.`);
       }
       for (const retinue of unit.retinueOptions ?? []) {
-        if (!unitIds.has(retinue.unitID) && !sections.some((s) => s.units?.some((u) => u.unitID === retinue.unitID))) {
-          problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
-        }
+        const target = sections.flatMap((s) => s.units ?? []).find((u) => u.unitID === retinue.unitID);
+        if (!target) problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is not a unit in this faction.`);
+        else if (target.kind !== 'regiment') problems.push(`${unit.unitID}: retinue "${retinue.unitID}" is a character; a retinue must be a regiment.`);
       }
       for (const models of unit.models ?? []) {
         if (!models.images?.length) problems.push(`${unit.unitID}: model graphics need at least one image.`);
@@ -247,7 +281,8 @@ export function validate(mod, catalog, imagePaths) {
     }
     propertyIds.add(property.id);
 
-    if (!property.effects.length) problems.push(`${property.id}: needs at least one effect.`);
+    if (!property.effects.length && !property.ability) problems.push(`${property.id}: needs at least one effect.`);
+    if (property.ability) problems.push(...abilityProblems(property, limits));
     if (property.effects.length > limits.maxEffectsPerProperty) {
       problems.push(`${property.id}: at most ${limits.maxEffectsPerProperty} effects.`);
     }
@@ -280,9 +315,14 @@ export function validate(mod, catalog, imagePaths) {
 // Export
 // ---------------------------------------------------------------------------------------------------
 
+export function usesAbilities(mod) {
+  return mod.faction.properties.some((p) => p.ability);
+}
+
 export function buildManifestJson(mod, catalog) {
   return {
-    schemaVersion: catalog.schemaVersion,
+    // Abilities need schema 2. A mod without them stays at 1, so a game that predates abilities still loads it.
+    schemaVersion: usesAbilities(mod) ? Math.max(2, catalog.schemaVersion) : 1,
     modId: mod.modId,
     displayName: mod.displayName,
     author: mod.author,
@@ -305,7 +345,8 @@ export function buildFactionJson(mod) {
     factionImage: faction.factionImage,
     icons: faction.icons,
     defaultColors: faction.defaultColors,
-    properties: faction.properties,
+    // An attack is the whole ability, so effects left over from before it was one are not exported.
+    properties: faction.properties.map((p) => (p.ability?.attack ? { ...p, effects: [] } : p)),
     characters: exportSection(faction.characters),
     battleLine: exportSection(faction.battleLine),
     sections: faction.sections.map(exportSection),
@@ -366,9 +407,10 @@ const MANIFEST = 'manifest.json';
  *
  * @param {Map<string, Uint8Array>} entries path -> bytes
  * @returns {{ manifest: object, faction: object, otherFactions: { path: string, text: string }[],
- *   images: Map<string, Uint8Array>, warnings: string[] }} faction is the first faction, the one the editor edits;
- *   otherFactions are the rest, as their files' text, to be written back unchanged. images are keyed by their path
- *   within the mod, which is also how the faction refers to them. warnings say what the editor cannot edit.
+ *   images: Map<string, Uint8Array>, workshop: Uint8Array|null, warnings: string[] }} faction is the first faction,
+ *   the one the editor edits; otherFactions are the rest, as their files' text, to be written back unchanged. images
+ *   are keyed by their path within the mod, which is also how the faction refers to them. workshop is the game's
+ *   workshop.json, if the mod has one. warnings say what the editor cannot edit.
  */
 export function readModFiles(entries, catalog) {
   const files = modRootFiles(entries);
@@ -427,7 +469,11 @@ export function readModFiles(entries, catalog) {
 
   const images = new Map([...files].filter(([path]) => path.toLowerCase().endsWith('.png')));
 
-  return { manifest, faction, otherFactions, images, warnings };
+  // The game's link to the mod's Workshop item. Carried into the next export: without it, reinstalling an export
+  // made Publish create a second Workshop item instead of updating the first.
+  const workshop = files.get(stored.get('workshop.json')) ?? null;
+
+  return { manifest, faction, otherFactions, images, workshop, warnings };
 }
 
 /** The files under the folder that holds manifest.json, keyed by their path from there. */
@@ -520,7 +566,9 @@ const FIELDS = new Map([
   'randomPosition', 'randomRotation', 'randomScale', 'randomBrightness', 'randomFlip', 'lookOutFromCenter',
   'notAvailableInWarband', 'id', 'description', 'appliesTo', 'effects', 'when', 'isAura', 'impact', 'stat', 'value',
   'amount', 'replaceMovement', 'effectType', 'unitTypes', 'conditions', 'cost', 'propertyIds', 'costs', 'spellCount',
-  'weapons', 'items', 'eliteUnit',
+  'weapons', 'items', 'eliteUnit', 'ability', 'type', 'cantrip', 'charges', 'target', 'allInRange', 'range',
+  'inCombat', 'canTargetInCombat', 'targetUnitTypes', 'duration', 'heal', 'rally', 'attack', 'd3', 'plus', 'fullHeal',
+  'power', 'dice', 'count', 'visual',
 ].map((name) => [name.toLowerCase(), name]));
 
 // Objects keyed by data (army sizes, stat names) rather than by field: their keys are left alone.

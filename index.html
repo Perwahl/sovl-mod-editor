@@ -104,6 +104,15 @@
   .problems ul { margin: 6px 0 0; padding-left: 20px; color: var(--text); }
   .problems summary { cursor: pointer; }
 
+  .problems details.notes { color: var(--dim); margin-top: 4px; }
+
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 9px;
+    max-width: 560px; padding: 20px 24px;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog li { margin-bottom: 8px; }
+
   #loader { padding: 60px 24px; max-width: 620px; margin: 0 auto; }
   #loader h1 { font-size: 20px; }
   code.inline { background: var(--card); padding: 1px 5px; border-radius: 4px; }
@@ -116,7 +125,7 @@
   <p>This tool needs the catalog that ships with the game — it lists the units, properties and effects
      this build understands.</p>
   <p>Your browser will not let a page opened from disk read a file next to it, so pick it manually:
-     <code class="inline">catalog.v1.json</code>, in this folder or in the game's
+     <code class="inline">catalog.v2.json</code>, in this folder or in the game's
      <code class="inline">StreamingAssets/modding</code>.</p>
   <p><input type="file" id="catalogInput" accept=".json"></p>
   <p class="hint">Serving this folder over http instead — <code class="inline">python -m http.server</code> —
@@ -141,6 +150,21 @@
   </main>
 
   <div id="problems" class="problems"></div>
+
+  <dialog id="installDialog">
+    <h2>Install <span id="installName"></span></h2>
+    <ol>
+      <li>In SOVL, open <strong>Mods</strong> and turn mods on, then press <strong>Open folder</strong>.</li>
+      <li>Right-click <code class="inline" id="installZip"></code> in your downloads and choose <strong>Extract All</strong>.
+          Extract it into a new folder inside the mods folder, so you end up with
+          <code class="inline">mods/<span id="installId"></span>/manifest.json</code>.</li>
+      <li>Back in SOVL, the faction shows up in the Mods panel. If it lists problems, fix them here and export again.</li>
+    </ol>
+    <p class="hint">Updating a mod you already installed? Replace the files in its folder, but keep
+       <code class="inline">workshop.json</code> if it has one: that file is what lets <strong>Publish</strong> update your
+       Workshop item instead of making a new one.</p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
 </div>
 
 <input type="file" id="imageInput" accept="image/png" multiple hidden>

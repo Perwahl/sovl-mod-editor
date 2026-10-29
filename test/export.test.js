@@ -5,7 +5,7 @@ import { buildFactionJson, exportFiles, referencedImages, setSelectorKind, valid
 
 const readJson = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 
-const catalog = readJson('../catalog.v1.json');
+const catalog = readJson('../catalog.v2.json');
 const spellIds = new Set(catalog.properties.filter((p) => p.type === 'UnitPropertySpell').map((p) => p.id));
 
 // A faction with a spellcaster that can take enchantments, and a regiment that can carry a banner. The same

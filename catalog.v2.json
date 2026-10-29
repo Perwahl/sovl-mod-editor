@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
-  "gameVersion": "1.32",
-  "generated": "2026-09-06",
+  "schemaVersion": 2,
+  "gameVersion": "1.34.0",
+  "generated": "2026-10-13",
   "modelTypes": [
     {
       "name": "Cavalry",
@@ -83,6 +83,15 @@
       "minimumModelsWidth": 0,
       "maximumModelsWidth": 0,
       "isMonstrous": true
+    },
+    {
+      "name": "LightChariot",
+      "width": 50,
+      "height": 100,
+      "movement": 16.0,
+      "minimumModelsWidth": 2,
+      "maximumModelsWidth": 3,
+      "isMonstrous": false
     },
     {
       "name": "MonstrousInfantry",
@@ -358,6 +367,44 @@
     "allOf",
     "anyOf"
   ],
+  "abilities": {
+    "types": [
+      "ability",
+      "spell"
+    ],
+    "targets": [
+      "self",
+      "friendly",
+      "enemy"
+    ],
+    "inCombat": [
+      "any",
+      "only",
+      "never"
+    ],
+    "attackDice": [
+      "RandomD6",
+      "SetNumber",
+      "SetNumberAutoHit",
+      "RandomD3"
+    ],
+    "attackVisuals": [
+      "BoltThrower",
+      "Canon",
+      "Catapult",
+      "Fireball",
+      "ShadowBolt",
+      "Thunderstrike",
+      "MarksmanRifle",
+      "ThousandMouths",
+      "ExplosiveCharges",
+      "FireBreath",
+      "HuntersBow",
+      "ChariotBows",
+      "TriceratopsCrew",
+      "Flamers"
+    ]
+  },
   "appliesTo": [
     "ownerUnit",
     "opponent"
@@ -686,6 +733,12 @@
       "type": "UnitPropertyCommanderAbility"
     },
     {
+      "id": "unbrokenLine",
+      "name": "Unbroken Line",
+      "description": "Activate once per battle. Commander and Retinue gain +1 Attack and +1 Ranged Attack for one turn.",
+      "type": "UnitPropertyCommanderAbility"
+    },
+    {
       "id": "warcry",
       "name": "Warcry",
       "description": "All your units have +1 Power for one turn.",
@@ -800,9 +853,21 @@
       "type": "UnitPropertyGeneral"
     },
     {
+      "id": "construct",
+      "name": "Construct",
+      "description": "Never fails Discipline tests, loses D3 wounds on lost combat.",
+      "type": "UnitPropertyGeneral"
+    },
+    {
       "id": "crushingCharge",
       "name": "Crushing Charge",
       "description": "Charge Bonus: +2 Power +2 Attacks",
+      "type": "UnitPropertyGeneral"
+    },
+    {
+      "id": "daemonforged",
+      "name": "Daemonforged",
+      "description": "-1 to targets Damage Save.",
       "type": "UnitPropertyGeneral"
     },
     {
@@ -1262,6 +1327,12 @@
       "type": "UnitPropertyGeneral"
     },
     {
+      "id": "riteOfTheSeal",
+      "name": "Rite of the Seal",
+      "description": "All your units gain +1 Defense this turn. Activate once per battle.",
+      "type": "UnitPropertyGeneral"
+    },
+    {
       "id": "runeOfFarsight",
       "name": "Rune Of Farsight",
       "description": "Ranged attack range increased by 5.",
@@ -1394,6 +1465,12 @@
       "type": "UnitPropertyGeneral"
     },
     {
+      "id": "thrall",
+      "name": "Thrall",
+      "description": "+2 Discipline while a Commander is attached to the unit.",
+      "type": "UnitPropertyGeneral"
+    },
+    {
       "id": "toughAsNails",
       "name": "Tough As Nails",
       "description": " Reroll 1s on Damage Saves",
@@ -1514,6 +1591,12 @@
       "type": "UnitPropertyGeneral"
     },
     {
+      "id": "blunderbuss",
+      "name": "Blunderbuss",
+      "description": "Range 12. D3 shots per model at Power 4.",
+      "type": "UnitPropertyRangedAttack"
+    },
+    {
       "id": "boltThrower",
       "name": "Bolt Thrower",
       "description": "Range 48. 3x Power 6.",
@@ -1604,6 +1687,18 @@
       "type": "UnitPropertyRangedAttack"
     },
     {
+      "id": "giantBow",
+      "name": "Giant Bow",
+      "description": "Range: 36. Power 4.",
+      "type": "UnitPropertyRangedAttack"
+    },
+    {
+      "id": "greaterGiantBow",
+      "name": "Great Bow",
+      "description": "Range: 36. 2x Power 6.",
+      "type": "UnitPropertyRangedAttack"
+    },
+    {
       "id": "handgun",
       "name": "Handguns",
       "description": "Range: 24. Power 4. ",
@@ -1670,9 +1765,21 @@
       "type": "UnitPropertyRangedAttack"
     },
     {
+      "id": "quakeShell",
+      "name": "Quake Shell",
+      "description": "Range 48. 2 x D3 shots at Power 4.",
+      "type": "UnitPropertyRangedAttack"
+    },
+    {
       "id": "ratkinLongrifle",
       "name": "Longrifle",
       "description": "Range 48. Power 5.",
+      "type": "UnitPropertyRangedAttack"
+    },
+    {
+      "id": "rocketSalvo",
+      "name": "Rocket Salvo",
+      "description": "Range 36. D6 shots at Power 5.",
       "type": "UnitPropertyRangedAttack"
     },
     {
@@ -1721,6 +1828,12 @@
       "id": "divineFavour",
       "name": "Divine Favour",
       "description": "Target unit gets +1 Skill and rerolls failed Discipline tests for one turn.",
+      "type": "UnitPropertySpell"
+    },
+    {
+      "id": "drivenOn",
+      "name": "Driven On",
+      "description": "Target friendly Thrall unit takes D3 wounds and gains +2 Power and +2 Movement Speed for one turn.",
       "type": "UnitPropertySpell"
     },
     {
@@ -1886,6 +1999,18 @@
       "type": "UnitPropertySpell"
     },
     {
+      "id": "riteOfRecurrence",
+      "name": "Rite of Recurrence",
+      "description": "Target a Reanimated unit that has already acted this turn. It may act again.",
+      "type": "UnitPropertySpell"
+    },
+    {
+      "id": "riteOfStone",
+      "name": "Rite of Stone",
+      "description": "Target Construct unit gains +2 Power and +6 Movement for one turn, then suffers -1 Power and -2 Movement for a turn.",
+      "type": "UnitPropertySpell"
+    },
+    {
       "id": "shadowBolt",
       "name": "Shadow Bolt",
       "description": "3 x Power 3 hits. Range: 18.",
@@ -2028,6 +2153,13 @@
     "maxStatModifier": 10,
     "maxMovementModifier": 20.0,
     "maxCombatScoreBonus": 10,
+    "maxAbilityCharges": 9,
+    "maxAbilityDuration": 6,
+    "maxAbilityRange": 999,
+    "maxHealDice": 6,
+    "maxHealBonus": 10,
+    "maxAttackPower": 10,
+    "maxAttackCount": 20,
     "maxModelScale": 8.0,
     "maxRiderOffset": 2.0,
     "maxImagePixels": 2048,
